@@ -11,7 +11,7 @@ public class PacketDoGachaInRollShopScRsp : BasePacket
         var proto = new DoGachaInRollShopScRsp();
 
         proto.RollShopId = RollShopId;
-        proto.RewardDisplayType = type; 
+        proto.RewardDisplayType = type; //Reward type display
         proto.Reward = reward;
 
         SetData(proto);

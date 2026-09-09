@@ -9,12 +9,12 @@ public class HandlerTrainPartySetBadgeAutoFillCsReq : Handler
     public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
     {
         var req = TrainPartySetBadgeAutoFillCsReq.Parser.ParseFrom(data);
-        var ret = connection.Player!.TrainPartyManager!.SetBadgeAutoFill(req.AELMBPLDFGJ);
+        var ret = connection.Player!.TrainPartyManager!.SetBadgeAutoFill(req.PELJACANAFH);
 
         var rsp = new BasePacket(CmdIds.TrainPartySetBadgeAutoFillScRsp);
         rsp.SetData(new TrainPartySetBadgeAutoFillScRsp
         {
-            AELMBPLDFGJ = req.AELMBPLDFGJ,
+            PELJACANAFH = req.PELJACANAFH,
             Retcode = ret
         });
         await connection.SendPacket(rsp);

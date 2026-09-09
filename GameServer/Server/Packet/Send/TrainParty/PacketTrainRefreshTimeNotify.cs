@@ -9,7 +9,7 @@ public class PacketTrainRefreshTimeNotify : BasePacket
     {
         SetData(new TrainRefreshTimeNotify
         {
-            TrainRefreshTime = refreshTime
+            IAMKNFKCLCH = refreshTime
         });
     }
 }

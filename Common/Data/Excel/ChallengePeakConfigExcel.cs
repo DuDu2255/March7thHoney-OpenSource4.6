@@ -1,9 +1,11 @@
+using MemoryPack;
 using Newtonsoft.Json;
 
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("ChallengePeakConfig.json")]
-public class ChallengePeakConfigExcel : ExcelResource
+[MemoryPackable]
+public partial class ChallengePeakConfigExcel : ExcelResource
 {
     public int ID { get; set; }
     public List<int> TagList { get; set; } = [];
@@ -55,7 +57,7 @@ public class ChallengePeakConfigExcel : ExcelResource
         var curConfId = 200000;
         foreach (var eventId in EventIDList)
         {
-            
+            // get from stage id
             if (!GameData.StageConfigData.TryGetValue(eventId, out var stage)) continue;
 
             var monsterId = stage.MonsterList.LastOrDefault()?.Monster0 ?? 0;

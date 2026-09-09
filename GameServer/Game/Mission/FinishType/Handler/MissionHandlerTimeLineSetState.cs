@@ -16,10 +16,10 @@ public class MissionHandlerTimeLineSetState : MissionFinishTypeHandler
         var propId = info.ParamInt2;
         var value = info.ParamStr1;
 
-        var data = player.GetScenePropTimelineData(floorId, groupId, propId); 
+        var data = player.GetScenePropTimelineData(floorId, groupId, propId); // get data
 
         if (data == null) return;
-        
+        // compare
         if (Encoding.UTF8.GetString(Convert.FromBase64String(data.ByteValue)) != value) return;
 
         await player.MissionManager!.FinishSubMission(info.ID);
@@ -33,10 +33,10 @@ public class MissionHandlerTimeLineSetState : MissionFinishTypeHandler
         var propId = excel.ParamInt2;
         var value = excel.ParamStr1;
 
-        var data = player.GetScenePropTimelineData(floorId, groupId, propId); 
+        var data = player.GetScenePropTimelineData(floorId, groupId, propId); // get data
 
         if (data == null) return;
-        
+        // compare
         if (Encoding.UTF8.GetString(Convert.FromBase64String(data.ByteValue)) != value) return;
 
         await player.QuestManager!.AddQuestProgress(excel.ID, 1);

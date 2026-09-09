@@ -9,9 +9,8 @@ using March7thHoney.Util;
 
 namespace March7thHoney.GameServer.Game.Message;
 
-public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
+public class MessageManager(PlayerInstance player) : BasePlayerManager<MessageData>(player)
 {
-    public MessageData Data { get; } = DatabaseHelper.Instance!.GetInstanceOrCreateNew<MessageData>(player.Uid);
     public List<MessageSectionData> PendingMessagePerformSectionList { get; private set; } = [];
 
     #region Get
@@ -29,7 +28,7 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
     {
         GameData.MessageContactsConfigData.TryGetValue(contactId, out var contactConfig);
         if (contactConfig == null) return [];
-        var stubFinishUnseen = !ConfigManager.Config.ServerOption.EnableMission;
+        var stubFinishUnseen = !Player.MissionEnabled;
         var result = new List<MessageGroup>();
         foreach (var item in contactConfig.Groups)
             if (Data.Groups.TryGetValue(item.ID, out var group))
@@ -60,9 +59,9 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
             }
             else if (stubFinishUnseen)
             {
-                
-                
-                
+                // EnableMission=false 时整个任务系统停掉，玩家永远走不到手机消息流程，
+                // 但部分客户端解锁（如忘却之庭通过帕姆消息推进 4010105/4010134）会以
+                // 消息组完成态作为门控。把未见过的组按"全部已完成"返回，对齐 stub 语义。
                 var stub = new MessageGroup
                 {
                     Id = (uint)item.ID,
@@ -106,7 +105,7 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
 
         if (Data.Groups.TryGetValue(sectionConfig.GroupID, out var group) &&
             group.Sections.Find(x => x.SectionId == sectionId) != null)
-            
+            // already exist
             return;
 
         foreach (var item in sectionConfig.StartMessageItemIDList) await AddMessageItem(item);
@@ -140,7 +139,7 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
             group.CurrentSectionId = sectionId;
             group.RefreshTime = Extensions.GetUnixSec();
             group.Status = MessageGroupStatus.MessageGroupDoing;
-            if (group.Sections.All(m => m.SectionId != sectionId)) 
+            if (group.Sections.All(m => m.SectionId != sectionId)) // new section
             {
                 group.Sections.Add(new MessageSectionData
                 {
@@ -149,15 +148,16 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
                     ToChooseItemId = itemConfig.NextItemIDList
                 });
 
-                if (itemConfig.NextItemIDList.Count == 1) await FinishMessageItem(itemConfig.NextItemIDList[0], false);
+                if (itemConfig.NextItemIDList.Count == 1)
+                    await FinishMessageItem(itemConfig.NextItemIDList[0], false, true);
             }
-            else 
+            else // old
             {
                 group.Sections.First(m => m.SectionId == sectionId).Status = MessageSectionStatus.MessageSectionDoing;
             }
         }
 
-        
+        // sync
         if (sendPacket)
         {
             var notify = new PacketPlayerSyncScNotify(group, group.Sections.First(m => m.SectionId == sectionId));
@@ -177,19 +177,19 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
         if (group.Sections.All(m => m.Status == MessageSectionStatus.MessageSectionFinish))
             group.Status = MessageGroupStatus.MessageGroupFinish;
 
-        
+        // sync
         if (sendPacket)
         {
             var notify = new PacketPlayerSyncScNotify(group, section);
             await Player.SendPacket(notify);
         }
 
-        
+        // broadcast to mission system
         await Player.MissionManager!.HandleFinishType(MissionFinishTypeEnum.MessagePerformSectionFinish);
         await Player.MissionManager!.HandleFinishType(MissionFinishTypeEnum.MessageSectionFinish);
     }
 
-    public async ValueTask FinishMessageItem(int itemId, bool sendPacket = true)
+    public async ValueTask FinishMessageItem(int itemId, bool sendPacket = true, bool trusted = false)
     {
         GameData.MessageItemConfigData.TryGetValue(itemId, out var itemConfig);
         if (itemConfig == null) return;
@@ -198,7 +198,9 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
         if (!Data.Groups.TryGetValue(groupId, out var group)) return;
         var section = group.Sections.First(m => m.SectionId == sectionId);
         if (section.Status != MessageSectionStatus.MessageSectionDoing) return;
-        
+        // Reject client ids that aren't currently offered — stops arbitrary message-flow advancement.
+        // Internal auto-advance passes trusted:true (it may legitimately chain across sections).
+        if (!trusted && !section.ToChooseItemId.Contains(itemId)) return;
         section.ToChooseItemId.Clear();
         section.Items.Add(new MessageItemData
         {
@@ -208,12 +210,12 @@ public class MessageManager(PlayerInstance player) : BasePlayerManager(player)
 
         group.RefreshTime = Extensions.GetUnixSec();
 
-        if (section.ToChooseItemId.Count == 1) 
-            await FinishMessageItem(section.ToChooseItemId[0], false);
+        if (section.ToChooseItemId.Count == 1) // if only one item, auto finish
+            await FinishMessageItem(section.ToChooseItemId[0], false, true);
 
         if (sendPacket)
         {
-            
+            // sync
             var notify = new PacketPlayerSyncScNotify(group, section);
             await Player.SendPacket(notify);
         }

@@ -10,14 +10,14 @@ public class MissionHandlerRelicSuit : MissionFinishTypeHandler
 {
     public override async ValueTask HandleMissionFinishType(PlayerInstance player, SubMissionInfo info, object? arg)
     {
-        
+        // this type wont be used in mission
         await ValueTask.CompletedTask;
     }
 
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // TODO: Implement this
         await player.QuestManager!.AddQuestProgress(quest.QuestID, 1);
     }
 }

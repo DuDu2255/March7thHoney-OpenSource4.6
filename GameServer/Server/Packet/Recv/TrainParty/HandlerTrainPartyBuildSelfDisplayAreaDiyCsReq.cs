@@ -11,7 +11,7 @@ public class HandlerTrainPartyBuildSelfDisplayAreaDiyCsReq : Handler
     {
         var req = TrainPartyBuildSelfDisplayAreaDiyCsReq.Parser.ParseFrom(data);
         var player = connection.Player!;
-        var selfDisplay = player.TrainPartyManager!.SetSelfDisplay(req.ICJFLLDCFHM);
+        var selfDisplay = player.TrainPartyManager!.SetSelfDisplay(req.ACLKMFCDMED);
         await player.SendPacket(new PacketTrainPartyBuildSelfDisplayAreaDiyScRsp(selfDisplay));
     }
 }

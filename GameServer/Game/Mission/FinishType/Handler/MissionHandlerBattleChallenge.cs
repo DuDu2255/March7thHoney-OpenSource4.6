@@ -11,7 +11,7 @@ public class MissionHandlerBattleChallenge : MissionFinishTypeHandler
 {
     public override async ValueTask HandleMissionFinishType(PlayerInstance player, SubMissionInfo info, object? arg)
     {
-        
+        // this type wont be used in mission
         await ValueTask.CompletedTask;
     }
 

@@ -4,7 +4,7 @@ namespace March7thHoney.Util.Security;
 
 public class Ec2b
 {
-    private const int HEAD_MAGIC = 1647469381; 
+    private const int HEAD_MAGIC = 1647469381; // "Ec2b"
     private const int KEY_SIZE = 16;
     private const int DATA_SIZE = 2048;
     private readonly byte[] Data;
@@ -14,9 +14,9 @@ public class Ec2b
     private ulong Seed;
     private byte[] XorKey;
 
-#pragma warning disable CS8618 
+#pragma warning disable CS8618 // CS8618 - Non-nullable variable must contain a non-null value when exiting constructor.
     private Ec2b(byte[] key, byte[] data)
-#pragma warning restore CS8618 
+#pragma warning restore CS8618 // CS8618 - Non-nullable variable must contain a non-null value when exiting constructor.
     {
         Key = key;
         Data = data;

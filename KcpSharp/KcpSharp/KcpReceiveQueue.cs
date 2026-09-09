@@ -31,7 +31,7 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
     private int _minimumBytes;
     private int _minimumSegments;
     private ManualResetValueTaskSourceCore<KcpConversationReceiveResult> _mrvtsc;
-    private byte _operationMode; 
+    private byte _operationMode; // 0-receive 1-wait for message 2-wait for available data
     private bool _signaled;
 
     private bool _transportClosed;
@@ -478,7 +478,7 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
             return;
         }
 
-        
+        // peek
         if (_operationMode == 1)
         {
             if (CalculatePacketSize(node, out var bytesRecevied))
@@ -491,7 +491,7 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
 
         Debug.Assert(_operationMode == 0);
 
-        
+        // ensure buffer is big enough
         var bytesInPacket = 0;
         if (!_stream)
         {
@@ -504,7 +504,7 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
 
             if (node is null)
             {
-                
+                // incomplete packet
                 result = default;
                 bufferTooSmall = false;
                 return;
@@ -537,12 +537,12 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
 
             if (sizeToCopy != data.Length)
             {
-                
+                // partial data is received.
                 node.ValueRef = (data.Consume(sizeToCopy), node.ValueRef.Fragment);
             }
             else
             {
-                
+                // full fragment is consumed
                 data.Release();
                 _queue.Remove(node);
                 _cache.Return(node);
@@ -590,7 +590,7 @@ internal sealed class KcpReceiveQueue : IValueTaskSource<KcpConversationReceiveR
             node = node.Next;
         }
 
-        
+        // deadlink
         packetSize = 0;
         return false;
     }

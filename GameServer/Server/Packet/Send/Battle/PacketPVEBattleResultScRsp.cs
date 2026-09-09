@@ -1,4 +1,6 @@
+using March7thHoney.Database.Avatar;
 using March7thHoney.GameServer.Game.Battle;
+using March7thHoney.GameServer.Game.GridFight.Battle;
 using March7thHoney.GameServer.Game.Player;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
@@ -17,12 +19,13 @@ public class PacketPVEBattleResultScRsp : BasePacket
         SetData(proto);
     }
 
-    public PacketPVEBattleResultScRsp(PVEBattleResultCsReq req, PlayerInstance player, BattleInstance battle) : base(
+    public PacketPVEBattleResultScRsp(PVEBattleResultCsReq req, PlayerInstance player, BattleInstance battle,
+        ItemList dropItemList) : base(
         CmdIds.PVEBattleResultScRsp)
     {
         var proto = new PVEBattleResultScRsp
         {
-            DropData = battle.GetDropItemList(),
+            DropData = dropItemList,
             StageId = req.StageId,
             BattleId = req.BattleId,
             EndStatus = req.EndStatus,
@@ -32,6 +35,13 @@ public class PacketPVEBattleResultScRsp : BasePacket
             MultipleDropData = new ItemList(),
             EventId = (uint)battle.EventId
         };
+
+        if (battle.GridFightContext != null)
+        {
+            var collection = new PlayerDataCollection(player.Data, player.InventoryManager!.Data, battle.Lineup);
+            foreach (var avatar in GridFightBattleProtoBuilder.BuildBattleAvatars(battle, battle.GridFightContext))
+                proto.BattleAvatarList.Add(GridFightBattleProtoBuilder.BuildBattleAvatarProto(avatar, collection));
+        }
 
         SetData(proto);
     }

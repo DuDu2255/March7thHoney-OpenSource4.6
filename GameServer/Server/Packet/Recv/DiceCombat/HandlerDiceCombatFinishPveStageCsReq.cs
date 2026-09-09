@@ -11,7 +11,8 @@ public class HandlerDiceCombatFinishPveStageCsReq : Handler
     {
         var req = DiceCombatFinishPveStageCsReq.Parser.ParseFrom(data);
         var instance = connection.Player!.ActivityManager!.DiceCombat;
-        instance.RecordStageFinish(req.MMLKFJIAKKH, req.IsWin);
-        await connection.SendPacket(new PacketDiceCombatFinishPveStageScRsp(req.MMLKFJIAKKH, req.IsWin));
+        // ODKEBLADOMK = stage id, EKJIPCEFPOG = is_win (inferred from 4.3 field order — verify in-game)
+        instance.RecordStageFinish(req.ODKEBLADOMK, req.EKJIPCEFPOG);
+        await connection.SendPacket(new PacketDiceCombatFinishPveStageScRsp(req.ODKEBLADOMK, req.EKJIPCEFPOG));
     }
 }

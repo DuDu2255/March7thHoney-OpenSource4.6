@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-2ea44f" alt="Platform" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-2ea44f" alt="Platform" />
   <img src="https://img.shields.io/badge/Status-Active%20Development-f39c12" alt="Status" />
   <img src="https://img.shields.io/badge/License-GPLv3-blue" alt="License" />
 </p>
@@ -21,6 +21,7 @@ The project is actively developed, with regular feature updates and fixes.
 - [Repository Layout](#repository-layout)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
+- [Native Linux Server](#native-linux-server)
 - [Build](#build)
 - [CI Artifacts](#ci-artifacts)
 - [Notes](#notes)
@@ -74,7 +75,7 @@ Detailed implementation progress: [Gameplay Implementation Tree](docs/GameplayIm
 
 - .NET SDK 10
 - Git
-- Windows or Linux (`x64` / `arm64`)
+- Windows, Linux, or macOS (`x64` / `arm64`)
 
 ## Quick Start
 
@@ -82,13 +83,51 @@ Detailed implementation progress: [Gameplay Implementation Tree](docs/GameplayIm
 git clone --recurse-submodules https://github.com/Mar7thLover/March7thHoney.git
 cd March7thHoney
 dotnet restore
-dotnet run --project program
+dotnet run --project Program/Program.csproj
 ```
+
+## Native Linux Server
+
+On Linux you can run from source the same way as Windows. The project path is
+case-sensitive on Linux, so use `Program`, not `program`:
+
+```bash
+dotnet run --project Program/Program.csproj
+```
+
+Or use the root launcher:
+
+```bash
+bash Start.sh
+```
+
+On a fresh Debian server, install prerequisites once:
+
+```bash
+bash scripts/setup-debian.sh
+```
+
+To update later:
+
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+dotnet run --project Program/Program.csproj
+```
+
+Optional systemd service setup:
+
+```bash
+sudo bash scripts/install-systemd-service.sh
+sudo systemctl start march7thhoney
+```
+
+More details: [Native Linux Setup](docs/native-linux.md).
 
 ## Build
 
 ```bash
-dotnet build program/program.csproj -c Release
+dotnet build Program/Program.csproj -c Release
 ```
 
 ## CI Artifacts
@@ -113,7 +152,7 @@ Workflow publishes self-contained builds for:
 - Community support: <https://discord.gg/CyreneEchoes>
 
 ## Credits
-- Commit history details: [History Commits](docs/History%20Commits.md)
+
 ### Collaborators
 
 - [Mar7thLover](https://github.com/Mar7thLover)
@@ -127,6 +166,5 @@ Workflow publishes self-contained builds for:
 
 ### Projects
 
-- [SqlSugar](https://github.com/donet5/SqlSugar)
 - [LunarCore](https://github.com/Melledy/LunarCore)
 - [DanhengServer](https://github.com/Mar7thLover/DanhengServer-OpenSource)

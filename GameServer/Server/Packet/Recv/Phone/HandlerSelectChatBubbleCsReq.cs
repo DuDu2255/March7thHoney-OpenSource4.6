@@ -5,15 +5,13 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Phone;
 
 [Opcode(CmdIds.SelectChatBubbleCsReq)]
-public class HandlerSelectChatBubbleCsReq : Handler
+public class HandlerSelectChatBubbleCsReq : Handler<SelectChatBubbleCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SelectChatBubbleCsReq req)
     {
-        var req = SelectChatBubbleCsReq.Parser.ParseFrom(data);
-
-        connection.Player!.Data.ChatBubble = (int)req.BubbleId;
+        player.Data.ChatBubble = (int)req.BubbleId;
 
         await connection.SendPacket(new PacketSelectChatBubbleScRsp(req.BubbleId));
-        await connection.Player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
+        await player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
     }
 }

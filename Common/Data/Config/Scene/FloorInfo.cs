@@ -1,3 +1,4 @@
+using MemoryPack;
 using System.Collections.Concurrent;
 using March7thHoney.Enums.Scene;
 using March7thHoney.Util;
@@ -6,7 +7,8 @@ using Newtonsoft.Json.Converters;
 
 namespace March7thHoney.Data.Config.Scene;
 
-public class FloorInfo
+[MemoryPackable]
+public partial class FloorInfo
 {
     [JsonConverter(typeof(ConcurrentDictionaryConverter<int, PropInfo>))]
     public ConcurrentDictionary<int, PropInfo> CachedTeleports = [];
@@ -52,34 +54,34 @@ public class FloorInfo
 
         foreach (var dimension in DimensionList) dimension.OnLoad(this);
 
-        
+        // Cache anchors
         foreach (var group in Groups.Values)
         foreach (var prop in group.PropList)
-            
+            // Check if prop can be teleported to
             if (prop.AnchorID > 0)
             {
-                
+                // Put inside cached teleport list to send to client when they request map info
                 CachedTeleports.TryAdd(prop.MappingInfoID, prop);
                 UnlockedCheckpoints.Add(prop);
 
-                
+                // Force prop to be in the unlocked state
                 prop.State = PropStateEnum.CheckPointEnable;
             }
             else if (!string.IsNullOrEmpty(prop.InitLevelGraph))
             {
                 var json = prop.InitLevelGraph;
 
-                
+                // Hacky way to setup prop triggers
                 if (json.Contains("Maze_GroupProp_OpenTreasure_WhenMonsterDie"))
                 {
-                    
+                    //prop.Trigger = new TriggerOpenTreasureWhenMonsterDie(group.Id);
                 }
                 else if (json.Contains("Common_Console"))
                 {
                     prop.CommonConsole = true;
                 }
 
-                
+                // Clear for garbage collection
                 prop.ValueSource = null;
                 prop.InitLevelGraph = null;
             }
@@ -88,7 +90,8 @@ public class FloorInfo
     }
 }
 
-public class FloorGroupInfo
+[MemoryPackable]
+public partial class FloorGroupInfo
 {
     public string GroupPath { get; set; } = "";
     public bool IsDelete { get; set; }
@@ -96,14 +99,16 @@ public class FloorGroupInfo
     public string Name { get; set; } = "";
 }
 
-public class FloorSavedValueInfo
+[MemoryPackable]
+public partial class FloorSavedValueInfo
 {
     public int ID { get; set; }
     public string Name { get; set; } = string.Empty;
     public int DefaultValue { get; set; }
 }
 
-public class FloorDimensionInfo
+[MemoryPackable]
+public partial class FloorDimensionInfo
 {
     public int ID { get; set; }
     public List<DimensionSavedValues> SavedValues { get; set; } = [];
@@ -129,7 +134,8 @@ public class FloorDimensionInfo
     }
 }
 
-public class DimensionSavedValues
+[MemoryPackable]
+public partial class DimensionSavedValues
 {
     public int ID { get; set; }
     public string Name { get; set; } = string.Empty;

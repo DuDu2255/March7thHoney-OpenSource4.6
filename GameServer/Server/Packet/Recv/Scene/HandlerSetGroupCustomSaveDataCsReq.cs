@@ -5,13 +5,14 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Scene;
 
 [Opcode(CmdIds.SetGroupCustomSaveDataCsReq)]
-public class HandlerSetGroupCustomSaveDataCsReq : Handler
+public class HandlerSetGroupCustomSaveDataCsReq : Handler<SetGroupCustomSaveDataCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetGroupCustomSaveDataCsReq req)
     {
-        var req = SetGroupCustomSaveDataCsReq.Parser.ParseFrom(data);
-        var player = connection.Player!;
-        player.SetCustomSaveData((int)req.EntryId, (int)req.GroupId, req.SaveData);
+        // Persist the client's per-group custom save blob; it is replayed in SceneInfo.CustomDataList on the
+        // next scene load (SceneInstance.Serialization, CustomSaveData[entryId][groupId]).
+        player.SetGroupCustomSaveData((int)req.EntryId, (int)req.GroupId, req.SaveData);
+
         await connection.SendPacket(new PacketSetGroupCustomSaveDataScRsp(req.EntryId, req.GroupId));
     }
 }

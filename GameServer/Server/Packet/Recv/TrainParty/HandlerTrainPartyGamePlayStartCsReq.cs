@@ -11,12 +11,12 @@ public class HandlerTrainPartyGamePlayStartCsReq : Handler
     {
         var req = TrainPartyGamePlayStartCsReq.Parser.ParseFrom(data);
         var manager = connection.Player!.TrainPartyManager!;
-        var ret = manager.StartGameplay(req.DMMNCNGGPHL, req.MAONLHBKOFK, out var gameplayData);
+        var ret = manager.StartGameplay(req.IDBDBICPBBG, out var gameplayData);
 
         var rsp = new BasePacket(CmdIds.TrainPartyGamePlayStartScRsp);
         rsp.SetData(new TrainPartyGamePlayStartScRsp
         {
-            MLBJFOPPBCM = gameplayData,
+            FJKHJADDKLD = gameplayData,
             Retcode = ret
         });
         await connection.SendPacket(rsp);

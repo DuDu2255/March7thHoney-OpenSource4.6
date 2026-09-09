@@ -25,7 +25,7 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 DimensionId = player.SceneInstance?.FloorId == floorId
                     ? (uint)player.SceneInstance.ResolveDimensionId()
                     : 0,
-                
+                // Keep SceneIdentifier in sync with floor to satisfy newer client map-info parsing.
                 SceneIdentifier = new SceneIdentifier
                 {
                     FloorId = floorId
@@ -47,7 +47,9 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 continue;
             }
 
-            var mapData = mapDatas.RandomElement();
+            var mapData = mapDatas.FirstOrDefault(x => x.ID == player.Data.EntryId)
+                          ?? mapDatas.MinBy(x => x.ID)!;
+            mazeMap.EntryId = (uint)mapData.ID;
             GameData.GetFloorInfo(mapData.PlaneID, mapData.FloorID, out var floorInfo);
             if (floorInfo == null)
             {
@@ -76,7 +78,7 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 ChestType = ChestType.MapInfoChestTypeChallenge
             });
 
-            
+            // Prefer runtime loaded groups for current scene to match official behavior.
             if (player.SceneInstance?.FloorId == floorId)
             {
                 foreach (var groupId in player.SceneInstance.Groups.Distinct())
@@ -110,7 +112,7 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 mazeMap.MazePropList.Add(mazeProp);
             }
 
-            
+            // Include persisted prop states so client-side scene map/prop status stays in sync after re-enter.
             if (player.SceneData!.ScenePropData.TryGetValue((int)floorId, out var floorPropData))
             {
                 foreach (var (groupId, propDataList) in floorPropData)
@@ -130,7 +132,7 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 }
             }
 
-            
+            // Include currently loaded scene props for active scene floor (fallback when DB has no row yet).
             if (player.SceneInstance?.FloorId == floorId)
             {
                 foreach (var prop in player.SceneInstance.Entities.Values.OfType<EntityProp>())
@@ -147,12 +149,11 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
                 }
             }
 
-            
-            if (player.SceneData!.FloorSavedData.TryGetValue((int)floorId, out var floorSavedData))
-            {
-                foreach (var (key, value) in floorSavedData)
-                    mazeMap.FloorSavedData[key] = value;
-            }
+            var floorSavedData = player.SceneInstance?.FloorId == floorId
+                ? player.SceneInstance.BuildClientFloorSavedData()
+                : player.SceneData!.FloorSavedData.GetValueOrDefault((int)floorId, []);
+            foreach (var (key, value) in floorSavedData)
+                mazeMap.FloorSavedValueMap[key] = value;
 
             if (!ConfigManager.Config.ServerOption.AutoLightSection)
             {
@@ -170,4 +171,3 @@ public class PacketGetSceneMapInfoScRsp : BasePacket
         SetData(rsp);
     }
 }
-

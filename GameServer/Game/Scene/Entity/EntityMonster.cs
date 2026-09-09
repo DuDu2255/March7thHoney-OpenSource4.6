@@ -162,8 +162,8 @@ public class EntityMonster(
         var dropItems = dropData.CalculateDrop();
         await Scene.Player.InventoryManager!.AddItems(dropItems, sendPacket);
 
-        
-        
+        // TODO: Rogue support
+        // call mission handler
         await Scene.Player.MissionManager!.HandleFinishType(MissionFinishTypeEnum.KillMonster, this);
         if (removeFromScene) await Scene.RemoveEntity(this);
         return dropItems;

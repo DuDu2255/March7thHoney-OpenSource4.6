@@ -27,7 +27,7 @@ public static class PacketLogHelper
 
         lock (CachedParsers)
         {
-            
+            // try to find the descriptor by opcode
             var asbly = Assembly.GetAssembly(typeof(PlayerGetTokenCsReq));
             if (asbly == null) return null;
 
@@ -36,7 +36,7 @@ public static class PacketLogHelper
             var desc = typ.GetProperty("Descriptor", BindingFlags.Public | BindingFlags.Static);
             if (desc?.GetMethod == null) return null;
 
-            
+            // get parser
             if (desc.GetValue(null) is not MessageDescriptor parserProperty) return null;
 
             var parserMethod = parserProperty.Parser.GetType().GetMethod("ParseFrom", [typeof(byte[])]);

@@ -11,12 +11,12 @@ public class HandlerTrainPartyUseCardCsReq : Handler
     {
         var req = TrainPartyUseCardCsReq.Parser.ParseFrom(data);
         var manager = connection.Player!.TrainPartyManager!;
-        var ret = manager.UseCard(req.GDFPBHMMFEA);
+        var ret = manager.UseCard(req.FGIHKKKOGJD);
 
         var rsp = new BasePacket(CmdIds.TrainPartyUseCardScRsp);
         rsp.SetData(new TrainPartyUseCardScRsp
         {
-            GDFPBHMMFEA = req.GDFPBHMMFEA,
+            FGIHKKKOGJD = req.FGIHKKKOGJD,
             Retcode = ret
         });
         await connection.SendPacket(rsp);

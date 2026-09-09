@@ -1,15 +1,15 @@
+using MemoryPack;
 using March7thHoney.Data;
 using March7thHoney.Database.Avatar;
 using March7thHoney.Database.Inventory;
 using March7thHoney.Database.Quests;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using SqlSugar;
 using LineupInfo = March7thHoney.Database.Lineup.LineupInfo;
 
 namespace March7thHoney.Database.Player;
 
-[SugarTable("Player")]
+[DbTable("Player")]
 public class PlayerData : BaseDatabaseDataHelper
 {
     public string? Name { get; set; } = "";
@@ -28,40 +28,40 @@ public class PlayerData : BaseDatabaseDataHelper
     public int Level { get; set; } = 1;
     public int Exp { get; set; } = 0;
     public int WorldLevel { get; set; } = 0;
-    public int Scoin { get; set; } = 0; 
-    public int Hcoin { get; set; } = 0; 
-    public int Mcoin { get; set; } = 0; 
-    public int TalentPoints { get; set; } = 0; 
+    public int Scoin { get; set; } = 0; // Credits
+    public int Hcoin { get; set; } = 0; // Jade
+    public int Mcoin { get; set; } = 0; // Crystals
+    public int TalentPoints { get; set; } = 0; // Rogue talent points
     public long MonthCardExpireTime { get; set; } = 0;
     public int LastMonthCardRewardDate { get; set; } = 0;
     public bool WelcomeAnnouncePending { get; set; } = false;
 
     public int Pet { get; set; } = 0;
-    [SugarColumn(IsNullable = true)] public int CurMusicLevel { get; set; }
+    public int CurMusicLevel { get; set; }
 
     public int Stamina { get; set; } = 300;
     public double StaminaReserve { get; set; } = 0;
     public long NextStaminaRecover { get; set; } = 0;
 
-    [SugarColumn(IsNullable = true, IsJson = true)]
     public Position? Pos { get; set; }
 
-    [SugarColumn(IsNullable = true, IsJson = true)]
     public Position? Rot { get; set; }
 
-    [SugarColumn(IsJson = true)] public PlayerHeadFrameInfo HeadFrame { get; set; } = new();
-    [SugarColumn(IsJson = true)] public List<int> PlayerOutfitList { get; set; } = [];
+    public PlayerHeadFrameInfo HeadFrame { get; set; } = new();
+    public List<int> PlayerOutfitList { get; set; } = [];
 
-    [SugarColumn(IsNullable = true)] public int PlaneId { get; set; }
+    public int PlaneId { get; set; }
 
-    [SugarColumn(IsNullable = true)] public int FloorId { get; set; }
+    public int FloorId { get; set; }
 
-    [SugarColumn(IsNullable = true)] public int EntryId { get; set; }
+    public int EntryId { get; set; }
 
-    [SugarColumn(IsNullable = true)] public long LastActiveTime { get; set; }
+    public long LastActiveTime { get; set; }
 
-    [SugarColumn(IsJson = true)] public List<int> TakenLevelReward { get; set; } = [];
-    [SugarColumn(IsJson = true)] public PrivacySettingsPb PrivacySettings { get; set; } = new();
+    public List<int> TakenLevelReward { get; set; } = [];
+    public PrivacySettingsPb PrivacySettings { get; set; } = new();
+
+    public int FakeTimeDate { get; set; } = 0; // yyyyMMdd, 0 = off
 
     public static PlayerData? GetPlayerByUid(long uid)
     {
@@ -84,9 +84,22 @@ public class PlayerData : BaseDatabaseDataHelper
         };
     }
 
+    // 4.4 lobby member basic info (MOHAGOFLGAP = pre-4.2 LobbyPlayerBasicInfo)
+    public MOHAGOFLGAP ToLobbyProto()
+    {
+        return new MOHAGOFLGAP
+        {
+            Nickname = Name,
+            Level = (uint)Level,
+            Icon = (uint)HeadIcon,
+            Platform = PlatformType.Pc,
+            Uid = (uint)Uid
+        };
+    }
+
     public PlayerSimpleInfo ToSimpleProto(FriendOnlineStatus status)
     {
-        if (!GameData.ChatBubbleConfigData.ContainsKey(ChatBubble)) 
+        if (!GameData.ChatBubbleConfigData.ContainsKey(ChatBubble)) // to avoid npe
             ChatBubble = 220000;
 
         var info = new PlayerSimpleInfo
@@ -102,15 +115,17 @@ public class PlayerData : BaseDatabaseDataHelper
             ChatBubbleId = (uint)ChatBubble,
             PersonalCard = (uint)PersonalCard,
             HeadFrameInfo = HeadFrame.ToProto(),
-            PlayerOutfitData = ToPlayerOutfitProto(),
             Gender = (uint)CurrentGender
         };
+
+        if (PlayerOutfitList.Count > 0)
+            info.PlayerOutfitData = ToPlayerOutfitProto();
 
         var pos = 0;
         var instance = DatabaseHelper.Instance!.GetInstance<AvatarData>(Uid);
         if (instance == null)
         {
-            
+            // Handle server profile
             var serverProfile = ConfigManager.Config.ServerOption.ServerProfile;
             if (Uid == serverProfile.Uid)
             {
@@ -165,7 +180,7 @@ public class PlayerData : BaseDatabaseDataHelper
 
         if (avatarInfo == null || inventoryInfo == null || questInfo == null)
         {
-            
+            // Handle server profile
             var serverProfile = ConfigManager.Config.ServerOption.ServerProfile;
             if (Uid == serverProfile.Uid)
                 info.AssistAvatarList.AddRange(
@@ -182,13 +197,13 @@ public class PlayerData : BaseDatabaseDataHelper
 
         info.RecordInfo = new PlayerRecordInfo
         {
-            MMFGIPPNEEF = (uint)avatarInfo.FormalAvatars.Count,
-            LCEEKBAJPHA = (uint)inventoryInfo.EquipmentItems.Select(x => x.ItemId).ToHashSet().Count,
-            KEBOJOIBOKE = (uint)inventoryInfo.RelicItems.Count,
-            LBKCIEBGMAJ = (uint)GameData.AchievementDataData.Values.Select(x => x.QuestID).ToHashSet()
+            DIOIIFAHAKK = (uint)avatarInfo.FormalAvatars.Count,
+            NECKJBHEKHE = (uint)inventoryInfo.EquipmentItems.Select(x => x.ItemId).ToHashSet().Count,
+            KCBINJNIBNO = (uint)inventoryInfo.RelicItems.Count,
+            ALGEOLGNFBL = (uint)GameData.AchievementDataData.Values.Select(x => x.QuestID).ToHashSet()
                 .Count(x => questInfo.Quests.GetValueOrDefault(x)?.QuestStatus is QuestStatus.QuestFinish
-                    or QuestStatus.QuestClose), 
-            GPJGLLANPIF = (uint)GameData.BackGroundMusicData.Count
+                    or QuestStatus.QuestClose), // count finished achievements
+            MHOIJFEBAPA = (uint)GameData.BackGroundMusicData.Count
         };
 
         var pos = 0;
@@ -208,15 +223,12 @@ public class PlayerData : BaseDatabaseDataHelper
         return info;
     }
 
-    public PlayerOutfitInfo ToPlayerOutfitProto()
-    {
-        var info = new PlayerOutfitInfo();
-        info.PlayerOutfitList.AddRange(PlayerOutfitList.Select(x => (uint)x));
-        return info;
-    }
+    public CJLCPMDGIBO ToPlayerOutfitProto() =>
+        new() { EAKOLIJOEPA = { PlayerOutfitList.Select(x => (uint)x) } };
 }
 
-public class PlayerHeadFrameInfo
+[MemoryPackable]
+public partial class PlayerHeadFrameInfo
 {
     public long HeadFrameExpireTime { get; set; }
     public uint HeadFrameId { get; set; }
@@ -231,7 +243,8 @@ public class PlayerHeadFrameInfo
     }
 }
 
-public class PrivacySettingsPb
+[MemoryPackable]
+public partial class PrivacySettingsPb
 {
     public bool DisplayChallengeLineup { get; set; } = true;
     public bool DisplayActiveState { get; set; } = true;
@@ -243,11 +256,9 @@ public class PrivacySettingsPb
     {
         return new PlayerSettingInfo
         {
-            COIGOCJHBOP = DisplayChallengeLineup,
-            CHCNEDNCIDJ = DisplayActiveState,
-            LPEPIDNJDEM = DisplayRecentlyState,
-            BKDCFBDMNIJ = DisplayBattleRecord,
-            PFJMEECGJMM = DisplayCollection
+            // TODO 4.3: PlayerSettingInfo 字段在 4.3 重排，DisplayActiveState/RecentlyState/BattleRecord 暂未映射
+            GNFDDPEMMFN = DisplayChallengeLineup,
+            FDHEPCKLCAM = DisplayCollection
         };
     }
 }

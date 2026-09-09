@@ -14,7 +14,7 @@ public class PacketSceneGroupRefreshScNotify : BasePacket
         SceneGroupRefreshType refreshType = SceneGroupRefreshType.Loaded)
         : base(CmdIds.SceneGroupRefreshScNotify)
     {
-        
+        // Live traces use AFIBFMAFNCC for packets that include entity deletion.
         if (refreshType == SceneGroupRefreshType.Loaded && removeEntity is { Count: > 0 })
             refreshType = SceneGroupRefreshType.Afibfmafncc;
 
@@ -103,11 +103,11 @@ public class PacketSceneGroupRefreshScNotify : BasePacket
             };
 
             foreach (var data in dataList)
-                group.DCLAKCFJCPJ.Add(new NNHGOBLNCIE
+                group.CDMKBCHLPAB.Add(new AKEKCKDIHLA
                 {
-                    ELKOCIJNABK = data.NewValue,
-                    FNAODNGJAMM = data.OldValue,
-                    ELNCJFFJFIH = data.PropertyName
+                    NewValue = data.NewValue,
+                    OldValue = data.OldValue,
+                    PropertyName = data.PropertyName
                 });
 
             proto.GroupRefreshList.Add(group);

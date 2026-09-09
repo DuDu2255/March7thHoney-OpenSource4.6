@@ -10,6 +10,10 @@
 *.userosscache
 *.sln.docstates
 
+# Server activation gate secrets (never commit the operator's launcher token)
+Config/activation.token
+*.vmp
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -364,6 +368,7 @@ MigrationBackup/
 FodyWeavers.xsd
 /GameServer/OriginalProto
 Resources/
+CyreneRes/
 Config/Handbook
 Config/Logs
 Config/Plugins
@@ -379,9 +384,14 @@ Config.json
 
 # Local AI assistant config
 CLAUDE.md
+.claude/
 
 # Local SQLite databases
 Config/Database/
+
+# Local environment files
+.env
+.env.*
 
 # Local GM handbook output
 GM Handbook/
@@ -390,3 +400,22 @@ Config/Hotfix.json
 Research/AccountPlatNative_CN.dll
 Research/AccountPlatNative_OS.dll
 Research/AccountPlatNative_OS.dll.i64
+
+## test dir
+tmp/
+
+## lua
+Lua/
+
+## Development
+dev/
+
+## Generated resource cache 
+Config/Resource.cache
+
+Config/Json/Meli.json
+Config Live.json
+
+## Proto: huge regenerable il2cpp dump (≈119MB) — keep out of git, available locally per version
+Proto/**/dump.cs
+AGENTS.md

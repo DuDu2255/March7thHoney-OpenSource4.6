@@ -5,16 +5,14 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.JukeBox;
 
 [Opcode(CmdIds.PlayBackGroundMusicCsReq)]
-public class HandlerPlayBackGroundMusicCsReq : Handler
+public class HandlerPlayBackGroundMusicCsReq : Handler<FKLMGEFILDI>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, FKLMGEFILDI req)
     {
-        var req = PlayBackGroundMusicCsReq.Parser.ParseFrom(data);
-        var musicId = req.DMGCIDGKPFF?.LEKGBMCOJDB?.Id ?? 0;
+        var musicId = req.JKFCKJNHLHI;
 
-        connection.Player!.Data.CurrentBgm = (int)musicId;
+        player.Data.CurrentBgm = (int)musicId;
 
         await connection.SendPacket(new PacketPlayBackGroundMusicScRsp(musicId));
     }
 }
-

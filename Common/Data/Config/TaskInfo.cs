@@ -1,16 +1,18 @@
+using MemoryPack;
 using March7thHoney.Enums.Avatar;
 using Newtonsoft.Json;
 
 namespace March7thHoney.Data.Config;
 
-public class TaskInfo
+[MemoryPackable]
+public partial class TaskInfo
 {
     public string Type { get; set; } = "";
 
     public int ID { get; set; }
     public int SummonUnitID { get; set; }
 
-    
+    // Here's a conflict between Dimbreath's res and Andy's res ( we recommend to use the one from Andy's res )
     public bool TriggerBattle { get; set; } = false;
     public SummonUnitInfo SummonUnit { get; set; } = new();
 
@@ -66,26 +68,29 @@ public class TaskInfo
     }
 }
 
-public class SummonUnitInfo
+[MemoryPackable]
+public partial class SummonUnitInfo
 {
     public int SummonUnitID { get; set; }
 }
 
-public class LifeTimeInfo
+[MemoryPackable]
+public partial class LifeTimeInfo
 {
     public bool IsDynamic { get; set; } = false;
     public FixedValueInfo<double> FixedValue { get; set; } = new();
 
     public int GetLifeTime()
     {
-        if (IsDynamic) return 20; 
-        if (FixedValue.Value <= 0 && FixedValue.Value >= -30000) return -1; 
+        if (IsDynamic) return 20; // find a better way to get the value
+        if (FixedValue.Value <= 0 && FixedValue.Value >= -30000) return -1; // infinite
         if (FixedValue.Value < -30000) return 20;
         return (int)(FixedValue.Value * 10);
     }
 }
 
-public class FixedValueInfo<T>
+[MemoryPackable]
+public partial class FixedValueInfo<T>
 {
     public T Value { get; set; } = default!;
 }

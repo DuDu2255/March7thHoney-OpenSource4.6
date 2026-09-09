@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using March7thHoney.Proto;
-using March7thHoney.Proto.ServerSide;
 using Newtonsoft.Json;
 
 namespace March7thHoney.Util;
@@ -17,29 +16,9 @@ public static class Extensions
         };
     }
 
-    public static Position ToPosition(this Vector3Pb vector)
-    {
-        return new Position
-        {
-            X = vector.X,
-            Y = vector.Y,
-            Z = vector.Z
-        };
-    }
-
     public static Vector ToVector(this Position position)
     {
         return new Vector
-        {
-            X = position.X,
-            Y = position.Y,
-            Z = position.Z
-        };
-    }
-
-    public static Vector3Pb ToVector3Pb(this Position position)
-    {
-        return new Vector3Pb
         {
             X = position.X,
             Y = position.Y,
@@ -112,7 +91,7 @@ public static class Extensions
 
     public static void WriteConvID(this BinaryWriter bw, long convId)
     {
-        
+        //bw.Write(convId);
         bw.Write((int)(convId >> 32));
         bw.Write((int)(convId & 0xFFFFFFFF));
     }

@@ -1,10 +1,8 @@
-using System.Reflection;
 using March7thHoney.GameServer.Server;
 using March7thHoney.Internationalization;
 using March7thHoney.Kcp;
 using March7thHoney.Util;
 using Spectre.Console;
-using static March7thHoney.GameServer.Plugin.Event.PluginEvent;
 
 namespace March7thHoney.Command.Command;
 
@@ -13,37 +11,30 @@ public class CommandManager
     private const int MaxCommandHistory = 100;
 
     private readonly List<string> _commandHistory = [];
+    private readonly Dictionary<string, GeneratedCommand> _generated = new(StringComparer.OrdinalIgnoreCase);
     private int _historyIndex = -1;
     public static CommandManager? Instance { get; private set; }
     public Dictionary<string, ICommand> Commands { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, CommandInfoAttribute> CommandInfo { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, string> CommandAlias { get; } = new(StringComparer.OrdinalIgnoreCase); 
+    public Dictionary<string, string> CommandAlias { get; } = new(StringComparer.OrdinalIgnoreCase); // alias -> command
     public Logger Logger { get; } = new("CommandManager");
     public Connection? Target { get; set; }
 
     public void RegisterCommands()
     {
         Instance = this;
-        foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
-            if (typeof(ICommand).IsAssignableFrom(type) && !type.IsAbstract)
-                RegisterCommand(type);
+        // Populated by the source generator (GeneratedCommandRegistry) from every [CommandInfo] class — no reflection.
+        foreach (var gen in GeneratedCommandRegistry.Build())
+        {
+            Commands[gen.Info.Name] = gen.Instance;
+            CommandInfo[gen.Info.Name] = gen.Info;
+            _generated[gen.Info.Name] = gen;
+            foreach (var alias in gen.Info.Alias)
+                CommandAlias[alias] = gen.Info.Name;
+        }
 
         Logger.Info(I18NManager.Translate("Server.ServerInfo.RegisterItem", Commands.Count.ToString(),
             I18NManager.Translate("Word.Command")));
-    }
-
-    public void RegisterCommand(Type type)
-    {
-        var attr = type.GetCustomAttribute<CommandInfoAttribute>();
-        if (attr == null) return;
-        var instance = Activator.CreateInstance(type);
-        if (instance is not ICommand command) return;
-        Commands.Add(attr.Name, command);
-        CommandInfo.Add(attr.Name, attr);
-
-        
-        foreach (var alias in attr.Alias) 
-            CommandAlias.Add(alias, attr.Name);
     }
 
     public void Start()
@@ -67,7 +58,7 @@ public class CommandManager
             {
                 Logger.Error(I18NManager.Translate("Game.Command.Notice.InternalError"));
             }
-        
+        // ReSharper disable once FunctionNeverReturns
     }
 
     private string ReadCommand()
@@ -121,7 +112,7 @@ public class CommandManager
 
                     break;
                 }
-                
+                // known issue: Ctrl + (Any Key but C) or other control key will cause display error
                 default:
                     input.Add(keyInfo.KeyChar);
                     Console.Write(keyInfo.KeyChar);
@@ -146,6 +137,9 @@ public class CommandManager
 
     public void HandleCommand(string input, ICommandSender sender)
     {
+        // Localize every reply (notices + command output) to the sender's language for this command only.
+        // Set on the synchronous entry so it flows into the command's async continuations via AsyncLocal.
+        I18NManager.LanguageOverride = sender.Language;
         try
         {
             var split = CommandArg.Tokenize(input);
@@ -160,7 +154,7 @@ public class CommandManager
                 if (IsTargetToken(cmd))
                 {
                     var target = cmd[1..];
-                    if (March7thHoneyListener.Connections.Values.ToList()
+                    if (March7thHoneyListener.GetSnapshot()
                             .Find(item => (item as Connection)?.Player?.Uid.ToString() == target) is Connection con)
                     {
                         if (split.Count == 1)
@@ -178,7 +172,7 @@ public class CommandManager
                     }
                     else
                     {
-                        
+                        // offline or not exist
                         sender.SendMsg(I18NManager.Translate("Game.Command.Notice.TargetNotFound", target));
                         return;
                     }
@@ -186,8 +180,7 @@ public class CommandManager
             }
             else
             {
-                InvokeOnPlayerUseCommand(sender, input);
-                
+                // player 
                 tempTarget = Listener.GetActiveConnection(sender.GetSender());
                 if (tempTarget == null)
                 {
@@ -204,7 +197,7 @@ public class CommandManager
                 tempTarget = null;
             }
 
-            
+            // find the command
             if (CommandAlias.TryGetValue(cmd, out var realCmd)) cmd = realCmd;
 
             if (Commands.TryGetValue(cmd, out var command))
@@ -214,7 +207,7 @@ public class CommandManager
                 {
                     if (!IsTargetToken(split[i])) continue;
                     var target = split[i][1..];
-                    if (March7thHoneyListener.Connections.Values.ToList()
+                    if (March7thHoneyListener.GetSnapshot()
                             .Find(item => (item as Connection)?.Player?.Uid.ToString() == target) is Connection con)
                     {
                         tempTarget = con;
@@ -229,16 +222,16 @@ public class CommandManager
 
                 var arg = new CommandArg(split, split.JoinFormat(" ", ""), sender, tempTarget, isTargetExplicit);
 
-                
+                // judge permission
                 if (arg.Target?.Player?.Uid != sender.GetSender() && !sender.HasPermission(CommandPermissions.TargetOthers))
                 {
                     sender.SendMsg(I18NManager.Translate("Game.Command.Notice.NoPermission"));
                     return;
                 }
 
-                
-                var isFound = false;
+                // dispatch via the generated method table — no reflection
                 var info = CommandInfo[cmd];
+                var gen = _generated[cmd];
 
                 if (!sender.HasPermission(info.Permission))
                 {
@@ -246,12 +239,10 @@ public class CommandManager
                     return;
                 }
 
-                foreach (var method in command.GetType().GetMethods())
+                foreach (var method in gen.Methods)
                 {
-                    var attr = method.GetCustomAttribute<CommandMethodAttribute>();
-                    if (attr == null) continue;
                     var canRun = true;
-                    foreach (var condition in attr.Conditions)
+                    foreach (var condition in method.Conditions)
                     {
                         if (split.Count <= condition.Index)
                         {
@@ -266,23 +257,16 @@ public class CommandManager
                     }
 
                     if (!canRun) continue;
-                    isFound = true;
                     InvokeCommandMethod(method, command, arg, sender, cmd);
-                    break;
+                    return;
                 }
 
-                if (isFound) return;
-                
-                foreach (var method in command.GetType().GetMethods())
+                if (gen.Default != null)
                 {
-                    var attr = method.GetCustomAttribute<CommandDefaultAttribute>();
-                    if (attr == null) continue;
-                    isFound = true;
-                    InvokeCommandMethod(method, command, arg, sender, cmd);
-                    break;
+                    InvokeCommandMethod(gen.Default, command, arg, sender, cmd);
+                    return;
                 }
 
-                if (isFound) return;
                 sender.SendMsg(I18NManager.Translate(info.Usage));
             }
             else
@@ -295,6 +279,12 @@ public class CommandManager
             Logger.Error(I18NManager.Translate("Game.Command.Notice.InternalError"), e);
             sender.SendMsg(I18NManager.Translate("Game.Command.Notice.InternalError"));
         }
+        finally
+        {
+            // Clear our own flow's override. In-flight async command tasks already captured it, so they
+            // keep localizing; this only stops the value leaking onto unrelated Translate calls.
+            I18NManager.LanguageOverride = null;
+        }
     }
 
     private static bool IsTargetToken(string token)
@@ -302,10 +292,10 @@ public class CommandManager
         return token.Length > 1 && token[0] == '@' && int.TryParse(token[1..], out _);
     }
 
-    private void InvokeCommandMethod(MethodInfo method, ICommand command, CommandArg arg, ICommandSender sender,
-        string commandName)
+    private void InvokeCommandMethod(GeneratedCommandMethod method, ICommand command, CommandArg arg,
+        ICommandSender sender, string commandName)
     {
-        var result = method.Invoke(command, [arg]);
+        var result = method.Invoke(command, arg);
         ObserveCommandResult(result, sender, commandName, method.Name);
     }
 

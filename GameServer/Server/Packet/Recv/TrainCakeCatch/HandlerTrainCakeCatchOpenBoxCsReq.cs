@@ -13,7 +13,7 @@ public class HandlerTrainCakeCatchOpenBoxCsReq : Handler
         packet.SetData(player.TrainCakeCatchManager!.OpenBox());
         await connection.SendPacket(packet);
 
-        
+        // Opening the box can seed or change the room's visible cat-tree setup.
         await player.TrainCakeCatchManager.BroadcastRoomSnapshotAsync();
     }
 }

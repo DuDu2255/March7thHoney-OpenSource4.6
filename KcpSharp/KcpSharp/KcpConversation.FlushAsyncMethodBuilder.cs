@@ -35,11 +35,11 @@ partial class KcpConversation
             return new KcpFlushAsyncMethodBuilder(conversation);
         }
 
-#pragma warning disable CA1822 
+#pragma warning disable CA1822 // Mark members as static
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Start<TStateMachine>(ref TStateMachine stateMachine)
             where TStateMachine : IAsyncStateMachine
-#pragma warning restore CA1822 
+#pragma warning restore CA1822 // Mark members as static
         {
             Debug.Assert(stateMachine is not null);
 
@@ -56,9 +56,9 @@ partial class KcpConversation
             }
         }
 
-#pragma warning disable CA1822 
+#pragma warning disable CA1822 // Mark members as static
         public void SetStateMachine(IAsyncStateMachine stateMachine)
-#pragma warning restore CA1822 
+#pragma warning restore CA1822 // Mark members as static
         {
             Debug.Fail("SetStateMachine should not be used.");
         }

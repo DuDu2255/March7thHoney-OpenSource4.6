@@ -3,16 +3,16 @@ using March7thHoney.GameServer.Server.Packet.Send.DailyActive;
 using March7thHoney.GameServer.Game.Player;
 using March7thHoney.GameServer.Server.Packet.Send.Mission;
 using March7thHoney.GameServer.Server.Packet.Send.Player;
+using March7thHoney.Util;
 
 namespace March7thHoney.GameServer.Server.Packet.Recv.Player;
 
 [Opcode(CmdIds.PlayerLoginFinishCsReq)]
-public class HandlerPlayerLoginFinishCsReq : Handler
+public class HandlerPlayerLoginFinishCsReq : PlayerHandler
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player)
     {
         await connection.SendPacket(CmdIds.PlayerLoginFinishScRsp);
-        var player = connection.Player;
         if (player?.InventoryManager != null &&
             MonthCardService.TryClaimDailyReward(player.Data, out var monthCardReward))
         {
@@ -21,7 +21,38 @@ public class HandlerPlayerLoginFinishCsReq : Handler
         }
 
         await connection.SendPacket(new PacketFinishedMissionScNotify(
-            player?.MissionManager?.GetAllFinishedMissionIds() ?? []));
-        await connection.SendPacket(new PacketDailyActiveInfoNotify());
+            player?.MissionManager?.Data.FinishedMainMissionIds ?? []));
+        await connection.SendPacket(new PacketDailyActiveInfoNotify(player));
+        await SendHoyoToonLuaAutoRun(connection);
+    }
+
+    private static async Task SendHoyoToonLuaAutoRun(Connection connection)
+    {
+        if (connection.Player == null) return;
+
+        var luaRoot = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "Lua"));
+        var candidates = new[]
+        {
+            "Auto/default.lua",
+            $"Auto/{connection.Player.Uid}.lua"
+        };
+
+        foreach (var relativePath in candidates)
+        {
+            string filePath;
+            try
+            {
+                filePath = HoyoToonLuaPayloadBuilder.ResolveLuaPath(luaRoot, relativePath);
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+
+            if (!File.Exists(filePath)) continue;
+
+            var bytes = await HoyoToonLuaPayloadBuilder.BuildAsync(luaRoot, relativePath);
+            await connection.SendPacket(new HandshakePacket(bytes));
+        }
     }
 }

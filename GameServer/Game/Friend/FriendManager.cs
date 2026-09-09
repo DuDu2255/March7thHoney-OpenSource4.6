@@ -19,15 +19,15 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
 
     public async ValueTask<Retcode> AddFriend(int targetUid)
     {
-        if (targetUid == Player.Uid) return Retcode.RetSucc; 
+        if (targetUid == Player.Uid) return Retcode.RetSucc; // Cannot add self
         if (FriendData.FriendDetailList.ContainsKey(targetUid)) return Retcode.RetFriendAlreadyIsFriend;
         if (FriendData.BlackList.Contains(targetUid)) return Retcode.RetFriendInBlacklist;
-        if (FriendData.SendApplyList.Contains(targetUid)) return Retcode.RetSucc; 
+        if (FriendData.SendApplyList.Contains(targetUid)) return Retcode.RetSucc; // Already send apply
 
         var target = DatabaseHelper.Instance!.GetInstance<FriendData>(targetUid);
         if (target == null) return Retcode.RetFriendPlayerNotFound;
         if (target.BlackList.Contains(Player.Uid)) return Retcode.RetFriendInTargetBlacklist;
-        if (target.ReceiveApplyList.Contains(targetUid)) return Retcode.RetSucc; 
+        if (target.ReceiveApplyList.Contains(targetUid)) return Retcode.RetSucc; // Already receive apply
 
         FriendData.SendApplyList.Add(targetUid);
         target.ReceiveApplyList.Add(Player.Uid);
@@ -36,13 +36,13 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         if (targetPlayer != null)
             await targetPlayer.SendPacket(new PacketSyncApplyFriendScNotify(Player.Data));
 
-        DatabaseHelper.ToSaveUidList.Add(targetUid);
+        DatabaseHelper.MarkDirty(targetUid);
         return Retcode.RetSucc;
     }
 
     public async ValueTask<PlayerData?> ConfirmAddFriend(int targetUid)
     {
-        if (targetUid == Player.Uid) return null; 
+        if (targetUid == Player.Uid) return null; // Cannot add self
         if (FriendData.FriendDetailList.ContainsKey(targetUid)) return null;
         if (FriendData.BlackList.Contains(targetUid)) return null;
 
@@ -61,7 +61,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         if (targetPlayer != null)
             await targetPlayer.SendPacket(new PacketSyncHandleFriendScNotify((uint)Player.Uid, true, Player.Data));
 
-        DatabaseHelper.ToSaveUidList.Add(targetUid);
+        DatabaseHelper.MarkDirty(targetUid);
         return targetData;
     }
 
@@ -77,7 +77,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         if (targetPlayer != null)
             await targetPlayer.SendPacket(new PacketSyncHandleFriendScNotify((uint)Player.Uid, false, Player.Data));
 
-        DatabaseHelper.ToSaveUidList.Add(targetUid);
+        DatabaseHelper.MarkDirty(targetUid);
     }
 
     public async ValueTask<PlayerData?> AddBlackList(int targetUid)
@@ -95,7 +95,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         if (targetPlayer != null)
             await targetPlayer.SendPacket(new PacketSyncAddBlacklistScNotify(Player.Uid));
 
-        DatabaseHelper.ToSaveUidList.Add(targetUid);
+        DatabaseHelper.MarkDirty(targetUid);
         return blackInfo;
     }
 
@@ -118,7 +118,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         if (targetPlayer != null)
             await targetPlayer.SendPacket(new PacketSyncDeleteFriendScNotify(Player.Uid));
 
-        DatabaseHelper.ToSaveUidList.Add(targetUid);
+        DatabaseHelper.MarkDirty(targetUid);
         return targetUid;
     }
 
@@ -134,7 +134,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
                 CommandExecutor.ExecuteCommand(new PlayerCommandSender(Player), cmd);
             }
 
-        
+        // receive message
         var recvPlayer = Listener.GetActiveConnection(recvUid)?.Player;
         if (recvPlayer != null)
         {
@@ -142,9 +142,9 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
         }
         else
         {
-            
+            // offline
             var friendData = DatabaseHelper.Instance!.GetInstance<FriendData>(recvUid);
-            if (friendData == null) return; 
+            if (friendData == null) return; // not exist maybe server profile
             if (!friendData.ChatHistory.TryGetValue(sendUid, out var history))
             {
                 friendData.ChatHistory[sendUid] = new FriendChatHistory();
@@ -153,7 +153,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
 
             history.MessageList.Add(data);
 
-            DatabaseHelper.ToSaveUidList.Add(recvUid);
+            DatabaseHelper.MarkDirty(recvUid);
         }
     }
 
@@ -200,15 +200,10 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
             info.Add(new ChatMessageData
             {
                 CreateTime = (ulong)chat.SendTime,
-                ExtraA = new ChatMessageExtra
+                CKHPFFENOBE = new EKNABKLPEEL
                 {
-                    Kind = 1,
-                    Value = (ulong)chat.SendUid
-                },
-                ExtraB = new ChatMessageExtra
-                {
-                    Kind = 1,
-                    Value = (ulong)chat.ReceiveUid
+                    KPOBMNLKLOK = HCMEILLLKBD.Jdoaipkbipe,
+                    RoleId = (uint)chat.SendUid
                 },
                 MessageDatas =
                 {
@@ -248,13 +243,12 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
 
         history.MessageList.Add(data);
 
-        await Player.SendPacket(
-            new PacketRevcMsgScNotify(
-                sourceUid,
-                (uint)data.ReceiveUid,
-                data.ExtraId > 0 ? null : data.Message,
-                (uint)Math.Max(0, data.ExtraId),
-                data.SendTime));
+        await Player.SendPacket(new PacketRevcMsgScNotify(
+            sourceUid,
+            (uint)historyKeyUid,
+            data.ExtraId > 0 ? null : data.Message,
+            (uint)data.ExtraId,
+            data.SendTime));
     }
 
     public List<PlayerData> GetFriendPlayerData(List<int>? uids = null)
@@ -330,7 +324,7 @@ public class FriendManager(PlayerInstance player) : BasePlayerManager(player)
     {
         var list = new List<PlayerData>();
 
-        foreach (var kcp in March7thHoneyListener.Connections.Values)
+        foreach (var kcp in March7thHoneyListener.GetSnapshot())
         {
             if (kcp.State != SessionStateEnum.ACTIVE) continue;
             if (kcp is not Connection connection) continue;

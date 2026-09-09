@@ -13,7 +13,7 @@ public class MT19937
 
     public MT19937()
     {
-        Seed(5489UL); 
+        Seed(5489UL); // MT19937 default seed
     }
 
     public MT19937(ulong seed)

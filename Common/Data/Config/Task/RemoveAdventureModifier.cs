@@ -1,10 +1,12 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class RemoveAdventureModifier : TaskConfigInfo
+[MemoryPackable]
+public partial class RemoveAdventureModifier : TaskConfigInfo
 {
-    public TargetEvaluator TargetType { get; set; } = new();
+    public TargetEvaluator TargetType { get; set; } = new UnknownTargetEvaluator();
     public string ModifierName { get; set; } = "";
 
     public new static TaskConfigInfo LoadFromJsonObject(JObject obj)
@@ -20,7 +22,7 @@ public class RemoveAdventureModifier : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.TargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 

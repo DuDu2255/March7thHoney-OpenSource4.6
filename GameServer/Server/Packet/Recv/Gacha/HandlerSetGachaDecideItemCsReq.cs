@@ -5,15 +5,20 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Gacha;
 
 [Opcode(CmdIds.SetGachaDecideItemCsReq)]
-public class HandlerSetGachaDecideItemCsReq : Handler
+public class HandlerSetGachaDecideItemCsReq : Handler<SetGachaDecideItemCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetGachaDecideItemCsReq req)
     {
-        var req = SetGachaDecideItemCsReq.Parser.ParseFrom(data);
+        var manager = player.GachaManager!;
+        // 4.3: MBOEFLAHLEM -> GFANBHAEKOK (decide item type), DGOMHDMJHEK -> OJNEFBJHCCK (selected items)
+        var retcode = manager.SetCharacterEventNonFeaturedPool((int)req.GachaId, (int)req.GFANBHAEKOK,
+            req.OJNEFBJHCCK);
+        var savedOrder = retcode == Retcode.RetSucc
+            ? manager.GetCharacterEventNonFeaturedPool().Select(id => (uint)id).ToList()
+            : req.OJNEFBJHCCK.ToList();
 
-        connection.Player!.GachaManager!.GachaData.GachaDecideOrder = req.DGOMHDMJHEK.Select(x => (int)x).ToList();
-
-        await connection.SendPacket(new PacketSetGachaDecideItemScRsp(req.GachaId, req.DGOMHDMJHEK.ToList()));
+        await connection.SendPacket(new PacketSetGachaDecideItemScRsp(req.GachaId, req.GFANBHAEKOK, savedOrder,
+            retcode));
     }
 }
 

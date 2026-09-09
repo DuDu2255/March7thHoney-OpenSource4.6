@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Enums.GridFight;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -5,9 +6,13 @@ using Newtonsoft.Json.Converters;
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("GridFightEquipment.json")]
-public class GridFightEquipmentExcel : ExcelResource
+[MemoryPackable]
+public partial class GridFightEquipmentExcel : ExcelResource
 {
     public uint ID { get; set; }
+
+    [JsonConverter(typeof(StringEnumConverter))]
+    public GridFightEquipmentTypeEnum EquipType { get; set; }
 
     [JsonConverter(typeof(StringEnumConverter))]
     public GridFightEquipCategoryEnum EquipCategory { get; set; }
@@ -20,6 +25,7 @@ public class GridFightEquipmentExcel : ExcelResource
     public GridFightEquipFuncTypeEnum EquipFunc { get; set; }
 
     public List<uint> EquipFuncParamList { get; set; } = [];
+    public List<GridFightRatioValue> ParamList { get; set; } = [];
     public List<uint> DressRuleParamList { get; set; } = [];
 
     public override int GetId()

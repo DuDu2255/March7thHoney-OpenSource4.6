@@ -42,7 +42,7 @@ public class March7thHoneyConnection
     public long? ConversationId => Conversation.ConversationId;
 
     public SessionStateEnum State { get; set; } = SessionStateEnum.INACTIVE;
-    
+    //public PlayerInstance? Player { get; set; }
 
     public virtual void Start()
     {
@@ -52,8 +52,8 @@ public class March7thHoneyConnection
 
     public virtual void Stop()
     {
-        
-        
+        //Player?.OnLogoutAsync();
+        //Listener.UnregisterConnection(this);
         Conversation.Dispose();
         try
         {
@@ -106,7 +106,7 @@ public class March7thHoneyConnection
 
     private StreamWriter GetWriter()
     {
-        
+        // Create the file if it doesn't exist
         var file = new FileInfo(DebugFile);
         if (!file.Exists)
         {
@@ -118,7 +118,14 @@ public class March7thHoneyConnection
         return Writer;
     }
 
-    public async Task SendPacket(byte[] packet)
+    /// <summary>
+    ///     Largest message KCP can carry in packet (non-stream) mode: the per-segment fragment counter is a
+    ///     single byte, so a message may span at most 256 segments of <c>mtu - 24</c> bytes. Anything bigger
+    ///     is rejected outright by the send queue — the client never sees it at all.
+    /// </summary>
+    public const int MaxPacketBytes = 256 * (March7thHoneyListener.KcpMtu - 24);
+
+    public async Task SendPacket(byte[] packet, int cmdId = 0)
     {
         try
         {
@@ -127,39 +134,41 @@ public class March7thHoneyConnection
 
             _ = await Conversation.SendAsync(packet, CancelToken.Token);
         }
-        catch
+        catch (Exception e)
         {
-            
+            // Never swallow this silently. A dropped response is invisible to the client, which simply
+            // keeps waiting — the classic symptom is a black screen with the loading bar frozen after a
+            // teleport into a dense floor, where the scene notify exceeds MaxPacketBytes.
+            var name = cmdId != 0 ? LogMap.GetValueOrDefault(cmdId, cmdId.ToString()) : "<raw>";
+            if (packet.Length > MaxPacketBytes)
+                Logger.Error(
+                    $"Dropped {name} ({packet.Length} bytes): over the {MaxPacketBytes}-byte KCP message limit. " +
+                    "The client will wait forever for this response.", e);
+            else
+                Logger.Error($"Failed to send {name} ({packet.Length} bytes)", e);
         }
     }
 
     public async Task SendPacket(BasePacket packet)
     {
-        
+        // Test
         if (packet.CmdId <= 0)
         {
             Logger.Debug("Tried to send packet with missing cmd id!");
             return;
         }
 
-        
+        // DO NOT REMOVE (unless we find a way to validate code before sending to client which I don't think we can)
         if (BannedPackets.Contains(packet.CmdId)) return;
         LogPacket("Send", packet.CmdId, packet.Data);
-        
+        // Header
         var packetBytes = packet.BuildPacket();
 
-        try
-        {
-            await SendPacket(packetBytes);
-        }
-        catch
-        {
-            
-        }
+        await SendPacket(packetBytes, packet.CmdId);
 
         if (packet.CmdId == CmdIds.SetClientPausedScRsp)
         {
-            await SendWatermarkLuaAsync();
+            await SendClientUiLuaAsync();
         }
 
     }
@@ -170,4 +179,5 @@ public class March7thHoneyConnection
     }
 
     public virtual Task SendWatermarkLuaAsync() => Task.CompletedTask;
+    public virtual Task SendClientUiLuaAsync() => SendWatermarkLuaAsync();
 }

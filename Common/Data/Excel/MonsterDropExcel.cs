@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Database.Inventory;
 using March7thHoney.Util;
 using Newtonsoft.Json;
@@ -5,7 +6,8 @@ using Newtonsoft.Json;
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("MonsterDrop.json")]
-public class MonsterDropExcel : ExcelResource
+[MemoryPackable]
+public partial class MonsterDropExcel : ExcelResource
 {
     public int MonsterTemplateID { get; set; }
     public int WorldLevel { get; set; }
@@ -26,15 +28,15 @@ public class MonsterDropExcel : ExcelResource
         {
             GameData.ItemConfigData.TryGetValue(item.ItemID, out var config);
             if (config == null) continue;
-            
-            
-            
-            
-            
-            
-            
-            
-            double mod = 1; 
+            //double mod = config.Rarity switch
+            //{
+            //    Enums.ItemRarityEnum.NotNormal => 0.8,
+            //    Enums.ItemRarityEnum.Rare => 0.3,
+            //    Enums.ItemRarityEnum.VeryRare => 0.125,
+            //    Enums.ItemRarityEnum.SuperRare => 0,
+            //    _ => 1,
+            //};
+            double mod = 1; // TODO: Implement rarity
             double count = WorldLevel + 3;
             var maxCount = (int)(count * mod);
             var minCount = (int)(count * mod * 0.5);
@@ -63,7 +65,8 @@ public class MonsterDropExcel : ExcelResource
     }
 }
 
-public class MonsterDropItem
+[MemoryPackable]
+public partial class MonsterDropItem
 {
     public int ItemID { get; set; }
 

@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using March7thHoney.Enums;
 using March7thHoney.WebServer.Server;
-using Newtonsoft.Json.Converters;
 
 namespace March7thHoney.WebServer.Response;
 
@@ -38,7 +37,7 @@ public class PlayerInformationResponse(int code, string message, PlayerInformati
 
 public class PlayerInformationData
 {
-    
+    // Basic info
     public int Uid { get; set; }
     public string Name { get; set; } = "";
     public string Signature { get; set; } = "";
@@ -46,17 +45,15 @@ public class PlayerInformationData
     public int Credit { get; set; }
     public int Jade { get; set; }
 
-    
+    // Scene info
     public int CurPlaneId { get; set; }
     public int CurFloorId { get; set; }
 
-    
-    [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
-    [System.Text.Json.Serialization.JsonConverter(typeof(JsonStringEnumConverter))]
+    // Player info
+    [JsonConverter(typeof(JsonStringEnumConverter<PlayerStatusEnum>))]
     public PlayerStatusEnum PlayerStatus { get; set; } = PlayerStatusEnum.Explore;
 
-    [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<PlayerSubStatusEnum>))]
     public PlayerSubStatusEnum PlayerSubStatus { get; set; } = PlayerSubStatusEnum.None;
 
     public int Stamina { get; set; } = 0;
@@ -64,11 +61,11 @@ public class PlayerInformationData
     public List<int> AssistAvatarList { get; set; } = [];
     public List<int> DisplayAvatarList { get; set; } = [];
 
-    
+    // Mission info
     public List<int> FinishedMainMissionIdList { get; set; } = [];
     public List<int> FinishedSubMissionIdList { get; set; } = [];
     public Dictionary<int, List<int>> AcceptedMissionList { get; set; } = [];
 
-    
+    // Lineup info
     public List<int> LineupBaseAvatarIdList { get; set; } = [];
 }

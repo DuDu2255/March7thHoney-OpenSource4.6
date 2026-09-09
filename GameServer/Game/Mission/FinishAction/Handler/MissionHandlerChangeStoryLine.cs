@@ -14,7 +14,7 @@ public class MissionHandlerChangeStoryLine : MissionFinishActionHandler
         var toAnchorId = @params[3];
 
         if (toStoryLineId == 0)
-            
+            // exit
             await player.StoryLineManager!.FinishStoryLine(toEntryId, toAnchorGroup, toAnchorId);
         else
             await player.StoryLineManager!.InitStoryLine(toStoryLineId, toEntryId, toAnchorGroup, toAnchorId);

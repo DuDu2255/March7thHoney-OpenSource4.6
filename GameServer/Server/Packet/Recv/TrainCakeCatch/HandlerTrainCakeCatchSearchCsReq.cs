@@ -10,7 +10,7 @@ public class HandlerTrainCakeCatchSearchCsReq : Handler
     {
         var req = TrainCakeCatchSearchCsReq.Parser.ParseFrom(data);
         var packet = new BasePacket(CmdIds.TrainCakeCatchSearchScRsp);
-        packet.SetData(connection.Player!.TrainCakeCatchManager!.Search(req.HCJPDNDOHAM));
+        packet.SetData(connection.Player!.TrainCakeCatchManager!.Search(req.PCPDHEIEJFO));
         await connection.SendPacket(packet);
     }
 }

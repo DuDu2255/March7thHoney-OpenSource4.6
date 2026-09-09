@@ -1,32 +1,23 @@
 using March7thHoney.GameServer.Server.Packet.Send.Mission;
+using March7thHoney.Database;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
 
 namespace March7thHoney.GameServer.Server.Packet.Recv.Mission;
 
-[Opcode(CmdIds.UpdateTrackMainMissionIdCsReq)]
-public class HandlerUpdateTrackMainMissionIdCsReq : Handler
+[Opcode(CmdIds.UpdateTrackMainMissionCsReq)]
+public class HandlerUpdateTrackMainMissionIdCsReq : Handler<UpdateTrackMainMissionCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, UpdateTrackMainMissionCsReq req)
     {
-        var req = UpdateTrackMainMissionCsReq.Parser.ParseFrom(data);
-
-        var missionData = connection.Player!.MissionManager!.Data;
+        var missionData = player.MissionManager!.Data;
         var prev = missionData.TrackingMainMissionId;
-        var target = ResolveTrackMissionId(req, missionData, prev);
-        missionData.TrackingMainMissionId = target;
+        // The client sends 0/1 as the "auto-select" sentinel, in either of the two request fields.
+        var requested = req.TrackMissionId > 1 ? (int)req.TrackMissionId : (int)req.JFONDEBDIOO;
+        missionData.TrackingMainMissionId = player.MissionManager.ResolveTrackingMainMissionId(requested);
+        DatabaseHelper.MarkDirty(player.Uid);
 
         await connection.SendPacket(new PacketUpdateTrackMainMissionIdScRsp(prev,
             missionData.TrackingMainMissionId));
     }
-
-    private static int ResolveTrackMissionId(UpdateTrackMainMissionCsReq req, March7thHoney.Database.Quests.MissionData data,
-        int prev)
-    {
-        if (req.TrackMissionId > 1) return (int)req.TrackMissionId;
-        if (req.GNPDGLGBIMM > 1) return (int)req.GNPDGLGBIMM;
-        if (prev > 0 && data.RunningMainMissionIds.Contains(prev)) return prev;
-        return data.RunningMainMissionIds.Count > 0 ? data.RunningMainMissionIds[0] : 0;
-    }
 }
-

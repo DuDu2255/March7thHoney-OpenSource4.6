@@ -1,42 +1,44 @@
+using MemoryPack;
 using March7thHoney.Data.Config.Task;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.SummonUnit;
 
-public class SummonUnitConfigInfo
+[MemoryPackable]
+public partial class SummonUnitConfigInfo
 {
     public string GroupConfigName { get; set; } = "";
     public string ConfigEntityPath { get; set; } = "";
 
     public string TickLodTemplateName { get; set; } = "";
 
-    
+    //public TriggerEffect[] ResidentEffects { get; set; }
     public string ShoesType { get; set; } = "";
     public bool ShowShadow { get; set; }
     public bool ColliderIsTrigger { get; set; }
 
     public string AttachPoint { get; set; } = "";
 
-    
-    
+    //public MVector3 LocalPosition { get; set; }
+    //public MVector3 LocalRotation { get; set; }
     public DynamicFloat Duration { get; set; } = new();
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    //public TaskConfigInfo[] OnCreate { get; set; }
+    //public TaskConfigInfo[] OnDestroy { get; set; }
+    //public TaskConfigInfo[] OnBeReplaced { get; set; }
+    //public TaskConfigInfo[] OnHide { get; set; }
+    //public TaskConfigInfo[] OnShow { get; set; }
+    //public TaskConfigInfo[] OnGroundInvalid { get; set; }
+    //public TaskConfigInfo[] OnResetPos { get; set; }
+    //public TaskConfigInfo[] OnSummonerGroundMove { get; set; }
+    //public SummonUnitCharacterAnimConfig AnimConfig { get; set; }
     public SummonUnitTriggerConfigInfo TriggerConfig { get; set; } = new();
-    
-    
-    
-    
-    
-    
+    //public SummonUnitMoveConfig MoveConfig { get; set; }
+    //public SummonUnitAIConfig AIConfig { get; set; }
+    //public SummonUnitSkillConfig SkillConfig { get; set; }
+    //public SummonUnitBeAttackConfig BeAttackConfig { get; set; }
+    //public SummonUnitGatherConfig GatherConfig { get; set; }
+    //public GOFKFHJBFHP DynamicValues { get; set; }
 
 
     public static SummonUnitConfigInfo LoadFromJsonObject(JObject obj)

@@ -13,13 +13,12 @@ public class PlayerCommandSender(PlayerInstance player) : ICommandSender
 
     public async ValueTask SendMsg(string msg)
     {
-        var sendTime = Extensions.GetUnixSec();
         await Player.SendPacket(new PacketRevcMsgScNotify(
             (uint)ConfigManager.Config.ServerOption.ServerProfile.Uid,
             (uint)Player.Uid,
             msg.Replace("\n", "    "),
             0,
-            sendTime));
+            Extensions.GetUnixSec()));
     }
 
     public bool HasPermission(string permission)
@@ -32,4 +31,6 @@ public class PlayerCommandSender(PlayerInstance player) : ICommandSender
     {
         return Player.Uid;
     }
+
+    public string? Language => Player.Language;
 }

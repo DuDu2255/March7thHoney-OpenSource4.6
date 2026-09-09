@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Enums.Scene;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -5,9 +6,10 @@ using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class PropStateExecute : TaskConfigInfo
+[MemoryPackable]
+public partial class PropStateExecute : TaskConfigInfo
 {
-    public TargetEvaluator TargetType { get; set; } = new();
+    public TargetEvaluator TargetType { get; set; } = new UnknownTargetEvaluator();
 
     [JsonConverter(typeof(StringEnumConverter))]
     public PropStateEnum State { get; set; } = PropStateEnum.Closed;
@@ -27,7 +29,7 @@ public class PropStateExecute : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.TargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 

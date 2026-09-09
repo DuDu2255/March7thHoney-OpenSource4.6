@@ -1,4 +1,5 @@
 using March7thHoney.Data;
+using March7thHoney.Data.Excel;
 using March7thHoney.Database;
 using March7thHoney.Database.Inventory;
 using March7thHoney.Database.Quests;
@@ -12,10 +13,9 @@ using March7thHoney.Util;
 
 namespace March7thHoney.GameServer.Game.Quest;
 
-public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
+public class QuestManager(PlayerInstance player) : BasePlayerManager<QuestData>(player)
 {
     public UnlockHandler UnlockHandler { get; } = new(player);
-    public QuestData QuestData { get; } = DatabaseHelper.Instance!.GetInstanceOrCreateNew<QuestData>(player.Uid);
     public List<QuestInfo> WaitToSync { get; } = [];
 
     #region Handler
@@ -45,7 +45,7 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         var syncList = new List<QuestInfo>();
         foreach (var quest in GameData.QuestDataData.Values)
         {
-            if (QuestData.Quests.ContainsKey(quest.QuestID)) continue; 
+            if (Data.Quests.ContainsKey(quest.QuestID)) continue; // Already accepted
             QuestInfo? acceptQuest = null;
             switch (quest.UnlockType)
             {
@@ -77,7 +77,7 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
 
                     if (accept2) acceptQuest = await AcceptQuest(quest.QuestID, false);
                     break;
-                case QuestUnlockTypeEnum.ManualUnlock: 
+                case QuestUnlockTypeEnum.ManualUnlock: // idk what this is
                     break;
                 case QuestUnlockTypeEnum.BattlePassWeekly:
                 case QuestUnlockTypeEnum.Unknown:
@@ -99,7 +99,7 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.QuestDataData.TryGetValue(questId, out var questExcel);
         if (questExcel == null) return null;
 
-        if (QuestData.Quests.ContainsKey(questId)) return null;
+        if (Data.Quests.ContainsKey(questId)) return null;
 
         var questInfo = new QuestInfo
         {
@@ -108,7 +108,8 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
             Progress = 0
         };
 
-        QuestData.Quests.Add(questId, questInfo);
+        Data.Quests.Add(questId, questInfo);
+        MarkQuestDataDirty();
 
         if (sync) await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
 
@@ -124,18 +125,19 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.FinishWayData.TryGetValue(questExcel.FinishWayID, out var finishWayExcel);
         if (finishWayExcel == null) return;
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return;
         if (questInfo.QuestStatus != QuestStatus.QuestDoing) return;
 
         questInfo.QuestStatus = QuestStatus.QuestFinish;
         questInfo.Progress = finishWayExcel.Progress;
         questInfo.FinishTime = DateTime.Now.ToUnixSec();
+        MarkQuestDataDirty();
         if (push)
             await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
         else
             WaitToSync.SafeAdd(questInfo);
 
-        
+        // accept next quest
         await AcceptQuestByCondition();
     }
 
@@ -151,15 +153,16 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
             finishWayExcel.FinishType != MissionFinishTypeEnum.TimeLineSetStateCnt &&
             finishWayExcel.FinishType != MissionFinishTypeEnum.FinishQuestByClient) return Retcode.RetQuestStatusError;
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return Retcode.RetQuestNotAccept;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return Retcode.RetQuestNotAccept;
         if (questInfo.QuestStatus != QuestStatus.QuestDoing) return Retcode.RetQuestStatusError;
 
         questInfo.QuestStatus = QuestStatus.QuestFinish;
         questInfo.Progress = finishWayExcel.Progress;
         questInfo.FinishTime = DateTime.Now.ToUnixSec();
+        MarkQuestDataDirty();
         await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
 
-        
+        // accept next quest
         await AcceptQuestByCondition();
 
         return Retcode.RetSucc;
@@ -170,12 +173,19 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.QuestDataData.TryGetValue(questId, out var questExcel);
         if (questExcel == null) return (Retcode.RetFail, null);
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return (Retcode.RetQuestNotAccept, null);
+        if (!Data.Quests.TryGetValue(questId, out var questInfo))
+        {
+            if (ConfigManager.Config.ServerOption.EnableQuest) return (Retcode.RetQuestNotAccept, null);
+            questInfo = AutoFinishDisabledQuest(questExcel);
+        }
+
+        if (questInfo.QuestStatus == QuestStatus.QuestClose) return (Retcode.RetQuestRewardAlreadyTaken, null);
         if (questInfo.QuestStatus != QuestStatus.QuestFinish) return (Retcode.RetQuestNotFinish, null);
 
-        questInfo.QuestStatus = QuestStatus.QuestClose; 
+        questInfo.QuestStatus = QuestStatus.QuestClose; // Close the quest after taking the reward
+        MarkQuestDataDirty();
 
-        
+        // handle reward
         var items = await Player.InventoryManager!.HandleReward(questExcel.RewardID);
 
         await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
@@ -190,10 +200,17 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.QuestDataData.TryGetValue(questId, out var questExcel);
         if (questExcel == null) return (Retcode.RetFail, rewards);
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return (Retcode.RetQuestNotAccept, rewards);
+        if (!Data.Quests.TryGetValue(questId, out var questInfo))
+        {
+            if (ConfigManager.Config.ServerOption.EnableQuest) return (Retcode.RetQuestNotAccept, rewards);
+            questInfo = AutoFinishDisabledQuest(questExcel);
+        }
+
+        if (questInfo.QuestStatus == QuestStatus.QuestClose) return (Retcode.RetQuestRewardAlreadyTaken, rewards);
         if (questInfo.QuestStatus != QuestStatus.QuestFinish) return (Retcode.RetQuestNotFinish, rewards);
 
         questInfo.QuestStatus = QuestStatus.QuestClose;
+        MarkQuestDataDirty();
 
         if (questExcel.RewardID != 0)
         {
@@ -202,7 +219,7 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
 
         if (optionalRewardId != 0)
         {
-            
+            // In most quest packets this id is a RewardID, not a direct ItemID.
             if (GameData.RewardDataData.ContainsKey(optionalRewardId))
             {
                 await AppendGrantedRewardForRsp(optionalRewardId, rewards);
@@ -228,7 +245,7 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
             return;
         }
 
-        
+        // Fallback: still fill rsp from resource config when runtime grant list is empty.
         if (!GameData.RewardDataData.TryGetValue(rewardId, out var rewardData) || rewardData == null) return;
 
         foreach (var (itemId, count) in rewardData.GetItems())
@@ -246,10 +263,11 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.FinishWayData.TryGetValue(questExcel.FinishWayID, out var finishWayExcel);
         if (finishWayExcel == null) return;
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return;
         if (questInfo.QuestStatus != QuestStatus.QuestDoing) return;
 
         questInfo.Progress += progress;
+        MarkQuestDataDirty();
         if (questInfo.Progress >= finishWayExcel.Progress) await FinishQuest(questId, push);
         else if (push)
             await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
@@ -264,12 +282,13 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.FinishWayData.TryGetValue(questExcel.FinishWayID, out var finishWayExcel);
         if (finishWayExcel == null) return;
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return;
         if (questInfo.QuestStatus != QuestStatus.QuestDoing) return;
 
-        if (progress < questInfo.Progress) return; 
+        if (progress < questInfo.Progress) return; // prevent rollback
         if (progress == questInfo.Progress) return;
         questInfo.Progress = progress;
+        MarkQuestDataDirty();
         if (questInfo.Progress >= finishWayExcel.Progress) await FinishQuest(questId, push);
         else if (push)
             await Player.SendPacket(new PacketPlayerSyncScNotify(questInfo));
@@ -290,9 +309,15 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
 
     public QuestStatus GetQuestStatus(int questId)
     {
-        if (!ConfigManager.Config.ServerOption.EnableQuest) return QuestStatus.QuestFinish;
+        if (!ConfigManager.Config.ServerOption.EnableQuest)
+        {
+            if (!Data.Quests.TryGetValue(questId, out var disabledQuestInfo)) return QuestStatus.QuestFinish;
+            return disabledQuestInfo.QuestStatus == QuestStatus.QuestClose
+                ? QuestStatus.QuestClose
+                : QuestStatus.QuestFinish;
+        }
 
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return QuestStatus.QuestNone;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return QuestStatus.QuestNone;
         return questInfo.QuestStatus;
     }
 
@@ -300,14 +325,40 @@ public class QuestManager(PlayerInstance player) : BasePlayerManager(player)
     {
         if (!ConfigManager.Config.ServerOption.EnableQuest) return [];
 
-        return QuestData.Quests.Values.Where(x => x.QuestStatus == QuestStatus.QuestDoing).ToList();
+        return Data.Quests.Values.Where(x => x.QuestStatus == QuestStatus.QuestDoing).ToList();
     }
 
     public int GetQuestProgress(int questId)
     {
-        if (!QuestData.Quests.TryGetValue(questId, out var questInfo)) return 0;
+        if (!Data.Quests.TryGetValue(questId, out var questInfo)) return 0;
         return questInfo.Progress;
     }
 
     #endregion
+
+    private QuestInfo AutoFinishDisabledQuest(QuestDataExcel questExcel)
+    {
+        var questInfo = new QuestInfo
+        {
+            QuestId = questExcel.QuestID,
+            QuestStatus = QuestStatus.QuestFinish,
+            Progress = GetFinishProgress(questExcel.FinishWayID),
+            FinishTime = DateTime.Now.ToUnixSec()
+        };
+
+        Data.Quests[questExcel.QuestID] = questInfo;
+        MarkQuestDataDirty();
+
+        return questInfo;
+    }
+
+    private static int GetFinishProgress(int finishWayId)
+    {
+        return GameData.FinishWayData.TryGetValue(finishWayId, out var finishWayExcel) ? finishWayExcel.Progress : 0;
+    }
+
+    private void MarkQuestDataDirty()
+    {
+        MarkDirty();
+    }
 }

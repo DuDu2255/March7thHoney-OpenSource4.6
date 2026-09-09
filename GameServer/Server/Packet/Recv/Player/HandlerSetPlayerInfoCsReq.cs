@@ -7,15 +7,13 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Player;
 
 [Opcode(CmdIds.SetPlayerInfoCsReq)]
-public class HandlerSetPlayerInfoCsReq : Handler
+public class HandlerSetPlayerInfoCsReq : Handler<SetPlayerInfoCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetPlayerInfoCsReq req)
     {
-        var player = connection.Player!;
-        var req = SetPlayerInfoCsReq.Parser.ParseFrom(data);
         if (req == null) return;
         player.Data.Name = req.Nickname;
-        if (req.Gender == Gender.None || player.Data.IsGenderSet)
+        if (req.Gender == Gender.None)
         {
             await connection.SendPacket(new PacketSetPlayerInfoScRsp(player, req.IsModify));
             await connection.SendPacket(new PacketPlayerSyncScNotify(player.ToProto()));
@@ -31,8 +29,8 @@ public class HandlerSetPlayerInfoCsReq : Handler
         await player.ChangeAvatarPathType(8001, MultiPathAvatarTypeEnum.Warrior);
 
         var heroAvatarId = player.Data.CurrentGender == Gender.Woman ? 8002 : 8001;
-        await player.LineupManager!.AddAvatarToCurTeam(heroAvatarId);
-        await player.LineupManager!.AddAvatarToCurTeam(1001);
+        await player.LineupManager!.AddAvatarToRealTeam(heroAvatarId);
+        await player.LineupManager!.AddAvatarToRealTeam(1001);
         await player.MissionManager!.FinishSubMission(100010134);
 
         await connection.SendPacket(new PacketSetPlayerInfoScRsp(player, req.IsModify));

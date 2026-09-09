@@ -1,4 +1,3 @@
-using March7thHoney.Database;
 using March7thHoney.Database.TrainParty;
 using March7thHoney.Data;
 using March7thHoney.GameServer.Game.Player;
@@ -6,10 +5,20 @@ using March7thHoney.Proto;
 
 namespace March7thHoney.GameServer.Game.TrainParty;
 
-public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player)
+// 4.4 port note: the TrainParty proto surface was fully re-obfuscated between 4.2 and 4.4 (field
+// numbers reshuffled, names rotated). The static/decoration half (self-display, areas, prop timers,
+// passengers, basic info) is mapped 1:1 against the 4.4 protos by structure. The gameplay board
+// minigame was re-architected in 4.4 into a turn-based "next_pending_action" protocol; it is
+// simulated server-side by TrainPartyGameplayRun with semantics inferred from field shapes — see the
+// note on that class before changing the flow.
+public class TrainPartyManager(PlayerInstance player) : BasePlayerManager<TrainData>(player)
 {
-    public TrainData Data { get; } =
-        DatabaseHelper.Instance!.GetInstanceOrCreateNew<TrainData>(player.Uid);
+    public TrainPartyGameplayRun? GameplayRun { get; private set; }
+
+    public void MarkDataDirty()
+    {
+        MarkDirty();
+    }
 
     public void EnsureDefaults()
     {
@@ -137,7 +146,7 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
         return new TrainPartyData
         {
             RecordId = (uint)Data.RecordId,
-            GGHOAIDMOMC = BuildGamePlayData(),
+            HCJJPLKELGC = BuildGamePlayData(),
             TrainPartyInfo = ToPartyInfo(),
             PassengerInfo = ToPassenger(),
             UnlockAreaNum = (uint)Data.Areas.Count
@@ -150,19 +159,15 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
 
         var info = new TrainPartyInfo
         {
-            EKLIAOBCHPI = true,
-            HIHKGPJCDPK = 30,
-            NMBFMHLNPLM = 100,
-            OBAMHCIFFOC = 30,
+            IEEAPCFKOJC = true,                     // 4.2 EKLIAOBCHPI (bool flag)
             CurFund = (uint)Data.Fund,
-            FCLJEACKGLE = BuildSelfDisplayProto()
+            CMCNNJKJNPK = BuildSelfDisplayProto()   // 4.2 FCLJEACKGLE (self-display payload)
+            // 4.2 cosmetic uint constants (HIHKGPJCDPK/NMBFMHLNPLM/OBAMHCIFFOC = 30/100/30) have no
+            // recoverable 4.4 anchor — left unset rather than guess a wrong field.
         };
 
         foreach (var pair in Data.PropTimes)
-            info.GBDEGDGGKOL.Add(new CCAIPEBCIMH { PropId = (uint)pair.Key, Time = pair.Value });
-
-        foreach (var pair in Data.TimedDynamicPropTimes)
-            info.MMFEPEBGAFC.Add(new CBGAODCKAGB { OOPOADNHABK = (uint)pair.Key, NJMONGKLJJC = pair.Value });
+            info.MHABCMLHCGD.Add(new GAGGCODGDLB { PropId = (uint)pair.Key, Time = pair.Value });
 
         info.AreaList.AddRange(Data.Areas.OrderBy(x => x.Key).Select(x => x.Value.ToProto()));
         return info;
@@ -173,12 +178,12 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
         EnsureDefaults();
 
         var info = new TrainPartyPassengerInfo();
-        info.DACEDNGJLBM.AddRange(Data.PassengerRecordMarks);
+        info.GHPFANGEMAN.AddRange(Data.PassengerRecordMarks);
         info.PassengerInfoList.AddRange(DefaultPassengers.Select(x => new TrainPartyPassenger
         {
             PassengerId = x.PassengerId,
             RecordId = x.RecordId,
-            DACEDNGJLBM = { x.Badges }
+            GHPFANGEMAN = { x.Badges }
         }));
         return info;
     }
@@ -195,16 +200,16 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
         return (ulong)Data.RefreshTime;
     }
 
-    public KJGMAEGNBKL SetSelfDisplay(KJGMAEGNBKL? selfDisplay)
+    public OIIPJFDNPAH SetSelfDisplay(OIIPJFDNPAH? selfDisplay)
     {
         EnsureDefaults();
 
         if (selfDisplay != null)
         {
-            Data.SelfDisplay = selfDisplay.IDPHCKABBJM
+            Data.SelfDisplay = selfDisplay.OFOKOHGPEDO
                 .Select(x => new TrainSelfDisplayEntry { Id = x.Id, Slot = x.Slot, Type = x.Type }).ToList();
 
-            foreach (var dynamic in selfDisplay.JDBOIHJHEHP)
+            foreach (var dynamic in selfDisplay.GOEJIMNENDC)
             {
                 var areaId = (int)(dynamic.DiceSlotId / 100000);
                 if (Data.Areas.TryGetValue(areaId, out var area))
@@ -257,59 +262,63 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
         return 0;
     }
 
-    public uint StartGameplay(IEnumerable<uint> passengerIds, uint gameplayType, out FKPMOKOJNHP gameplayData)
+    // Gameplay (board minigame) — simulated by TrainPartyGameplayRun (best-effort 4.4 protocol).
+    public uint StartGameplay(uint gameplayType, out EPHKIEHONGB gameplayData)
     {
         EnsureDefaults();
 
         Data.GameplayType = (int)gameplayType;
-        Data.GameplayRound = Math.Max(Data.GameplayRound, 1);
-
-        var selection = passengerIds.ToList();
-        if (selection.Count > 0)
-        {
-            Data.GameplayPassengers = selection.Select(id =>
-            {
-                var existing = DefaultGameplayPassengers.FirstOrDefault(x => x.PassengerId == id);
-                return existing ?? new TrainPendingPassengerInfo { PassengerId = id, Hp = 300, Atk = 30 };
-            }).ToList();
-        }
-
+        Data.GameplayRound = 1;
+        Data.GameplayQueuePosition = 0;
         MarkDirty();
-        gameplayData = BuildGamePlayData();
+
+        GameplayRun = TrainPartyGameplayRun.Create(Data, gameplayType);
+        gameplayData = GameplayRun.BuildGameplayData();
         return 0;
     }
 
-    public uint HandlePendingAction(uint queuePosition, out TrainPartyHandlePendingActionScRsp rsp)
+    public uint HandlePendingAction(TrainPartyHandlePendingActionCsReq req, out TrainPartyHandlePendingActionScRsp rsp)
     {
         EnsureDefaults();
-        Data.GameplayQueuePosition = (int)queuePosition;
+
+        rsp = new TrainPartyHandlePendingActionScRsp();
+
+        // Client may resume a board without an explicit start (e.g. after relog).
+        GameplayRun ??= TrainPartyGameplayRun.Create(Data, (uint)Data.GameplayType);
+
+        var ret = GameplayRun.HandleAnswer(req, rsp);
+
+        Data.GameplayRound = (int)GameplayRun.Round;
+        Data.GameplayQueuePosition = (int)GameplayRun.QueuePosition;
         MarkDirty();
 
-        rsp = new TrainPartyHandlePendingActionScRsp
-        {
-            QueuePosition = queuePosition,
-            KEJOPPIDNPP = true,
-            OFCKHGLINAG = new MAGFKFCMLJM
-            {
-                FCLIKOAJCFN = (uint)Data.GameplayRound
-            }
-        };
-
-        rsp.OFCKHGLINAG.DMMNCNGGPHL.AddRange(Data.GameplayPassengers.Select(x => new DOBIOOHLGAA
-        {
-            PassengerId = x.PassengerId,
-            IANGBIBHJDF = 100,
-            DGFGNMJALGJ = new DKBNGDHCNCH
-            {
-                KKIOIFLJEEL = x.Hp,
-                PNOCKMEMHLK = x.Atk
-            }
-        }));
-
-        return 0;
+        return ret;
     }
 
-    public uint TakeBuildLevelAward(uint level, out ItemList itemList)
+    // Drains the deltas produced by the last answered pending action; null when there is nothing to push.
+    public TrainPartySyncUpdateScNotify? BuildGameplaySyncNotify()
+    {
+        if (GameplayRun == null || GameplayRun.PendingDeltas.Count == 0) return null;
+
+        var notify = new TrainPartySyncUpdateScNotify();
+        notify.JKPJFKCBIEM.AddRange(GameplayRun.PendingDeltas);
+        GameplayRun.PendingDeltas.Clear();
+        return notify;
+    }
+
+    // Ends the current board run (leave or settle). Returns true when a run was actually active.
+    public bool ResetGameplay()
+    {
+        if (GameplayRun == null) return false;
+
+        GameplayRun = null;
+        Data.GameplayRound = 1;
+        Data.GameplayQueuePosition = 0;
+        MarkDirty();
+        return true;
+    }
+
+    public uint TakeBuildLevelAward(out ItemList itemList)
     {
         EnsureDefaults();
         itemList = new ItemList();
@@ -329,21 +338,15 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
 
     public TrainPartyMoveScNotify BuildMoveNotify()
     {
-        var notify = new TrainPartyMoveScNotify { DGBNFMAEMKM = (uint)Data.GameplayRound };
-        notify.HACAPEDIPAB.AddRange(Data.MoveHistory.Select(x => new ANBOFKHHDNE
-        {
-            CJOPNFDBJHD = x.CardId,
-            UniqueId = x.UniqueId,
-            DisplayValue = x.DisplayValue,
-            JBPCICCFPGE = x.BoardIndex
-        }));
+        var notify = new TrainPartyMoveScNotify { DNGKGLFMGGE = (uint)Data.GameplayRound };
+        if (GameplayRun != null) notify.JABPLBJAKKM.AddRange(GameplayRun.Moves);
         return notify;
     }
 
     public TrainPartySettleNotify BuildSettleNotify()
     {
-        var notify = new TrainPartySettleNotify { GDFPBHMMFEA = (uint)Data.LastUsedCardId };
-        notify.OFCKHGLINAG = BuildPendingResult();
+        var notify = new TrainPartySettleNotify { FGIHKKKOGJD = (uint)Data.LastUsedCardId };
+        if (GameplayRun != null) notify.CBFPJAJAKGI = GameplayRun.BuildStatus();
         return notify;
     }
 
@@ -353,125 +356,49 @@ public class TrainPartyManager(PlayerInstance player) : BasePlayerManager(player
         {
             RecordId = (uint)Data.RecordId,
             UnlockAreaNum = (uint)Data.Areas.Count,
-            FIJHIEOANNM = ToPassenger()
+            ENBJCMPCMLK = ToPassenger()
         };
 
-        notify.IENGEPCHHMC.AddRange(Data.UnlockedPassengerIds);
+        notify.CEJPCMHEEMN.AddRange(Data.UnlockedPassengerIds);
         return notify;
     }
 
-    private MAGFKFCMLJM BuildPendingResult()
+    private EPHKIEHONGB BuildGamePlayData()
     {
-        var result = new MAGFKFCMLJM { FCLIKOAJCFN = (uint)Data.GameplayRound };
-        result.DMMNCNGGPHL.AddRange(Data.GameplayPassengers.Select(x => new DOBIOOHLGAA
-        {
-            PassengerId = x.PassengerId,
-            IANGBIBHJDF = 100,
-            DGFGNMJALGJ = new DKBNGDHCNCH
-            {
-                KKIOIFLJEEL = x.Hp,
-                PNOCKMEMHLK = x.Atk
-            }
-        }));
-        return result;
-    }
+        // With an active run, expose its full state; otherwise return only the safely-known scalar
+        // (gameplay type) so GetData always succeeds.
+        if (GameplayRun != null) return GameplayRun.BuildGameplayData();
 
-    private FKPMOKOJNHP BuildGamePlayData()
-    {
-        var data = new FKPMOKOJNHP
+        return new EPHKIEHONGB
         {
-            MAONLHBKOFK = (uint)Data.GameplayType,
-            ADGDMDNMCIK = new LNLMPKALPEF
-            {
-                AOLHMEFDAHE = 2,
-                BHFDLCPEPHM = 2,
-                FHKEMCLFBON = new GDKPBDAAKBH
-                {
-                    DGGAIEANNBJ = 5,
-                    DHFGLLAIFHP = 6,
-                    FELAADBOAKD = 4,
-                    MPJPBLLCMHK = 8001
-                }
-            },
-            MBHAHNEJGAC = new AJNICOHFJGC
-            {
-                IJIMFPEKPOK = 100,
-                IMKOJKJAHMM = new KBNIJFEMBPJ()
-            },
-            NJFAMMMDDIK = new MEGIHBEMOAB
-            {
-                AFOLIFFCDHJ = 1001,
-                FNKKIDJPKIH = 28,
-                CurIndex = (uint)Data.GameplayRound
-            }
+            IDBDBICPBBG = (uint)Data.GameplayType
         };
-
-        data.ADGDMDNMCIK.JBOCOPNEJLB.AddRange(Data.MoveHistory.Select(x => new ANBOFKHHDNE
-        {
-            CJOPNFDBJHD = x.CardId,
-            UniqueId = x.UniqueId,
-            DisplayValue = x.DisplayValue,
-            JBPCICCFPGE = x.BoardIndex
-        }));
-
-        data.MBHAHNEJGAC.IMKOJKJAHMM.IMKOJKJAHMM.AddRange(Data.Cards.Select(x => new DKBJKODADGM
-        {
-            CardId = x.CardId,
-            CurIndex = x.CurIndex,
-            UniqueId = x.UniqueId
-        }));
-
-        data.NJFAMMMDDIK.DMMNCNGGPHL.AddRange(Data.GameplayPassengers.Select(x => new DOBIOOHLGAA
-        {
-            PassengerId = x.PassengerId,
-            IANGBIBHJDF = 100,
-            DGFGNMJALGJ = new DKBNGDHCNCH
-            {
-                KKIOIFLJEEL = x.Hp,
-                PNOCKMEMHLK = x.Atk
-            }
-        }));
-
-        data.NJFAMMMDDIK.IBEBJMMCIDH.Add(105);
-        data.NJFAMMMDDIK.PHGLFHDDACM.AddRange(Data.GameplaySkills.Select(x => new JAFPMLLOGDI
-        {
-            SkillId = x.SkillId,
-            SkillLevel = x.SkillLevel,
-            MOOOPAMBOFK = x.Count
-        }));
-
-        return data;
     }
 
-    private KJGMAEGNBKL BuildSelfDisplayProto()
+    private OIIPJFDNPAH BuildSelfDisplayProto()
     {
-        var proto = new KJGMAEGNBKL();
-        proto.IDPHCKABBJM.AddRange(Data.SelfDisplay.Select(x => new IOBBILGOFCL
+        var proto = new OIIPJFDNPAH();
+        proto.OFOKOHGPEDO.AddRange(Data.SelfDisplay.Select(x => new CLLBJDEJFNF
         {
             Id = x.Id,
             Slot = x.Slot,
             Type = x.Type
         }));
 
-        proto.JDBOIHJHEHP.AddRange(DefaultSelfDisplayDynamics.Select(x => new AreaDynamicInfo
+        proto.GOEJIMNENDC.AddRange(DefaultSelfDisplayDynamics.Select(x => new AreaDynamicInfo
         {
             DiceSlotId = x.DiceSlotId,
             DiyDynamicId = x.DiyDynamicId
         }));
 
-        proto.NMLANPJGJFA.AddRange(TimedDynamicProps.Select(x => new LMHFOFIEIMN
+        proto.POLMJFIKNHN.AddRange(TimedDynamicProps.Select(x => new POFNNGOCEOK
         {
             DiceSlotId = x.DiceSlotId,
-            OOPOADNHABK = x.DynamicId,
-            NJMONGKLJJC = x.Time
+            EIKLMFPMJJD = x.DynamicId,
+            ExpireTime = x.Time
         }));
 
         return proto;
-    }
-
-    private void MarkDirty()
-    {
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
     }
 
     private static readonly TrainSelfDisplayEntry[] DefaultSelfDisplay =

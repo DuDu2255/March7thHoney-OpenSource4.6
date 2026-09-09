@@ -50,9 +50,29 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
 
     public override async Task SendWatermarkLuaAsync()
     {
+        var lua = BuildWatermarkLua();
+        if (lua != null) await SendLuaAsync(lua);
+    }
+
+    public override async Task SendClientUiLuaAsync()
+    {
         if (Player == null) return;
+        var watermark = BuildWatermarkLua();
+        var signal = NetStatusLua.Build(ConfigManager.Config.ServerOption.NetStatus);
+        var lua = watermark == null ? signal : $"pcall(function()\n{watermark}\nend)\n{signal}";
+        await SendLuaAsync(lua);
+    }
+
+    private async Task SendLuaAsync(string lua)
+    {
+        await SendPacket(new HandshakePacket(System.Text.Encoding.UTF8.GetBytes(lua)));
+    }
+
+    private string? BuildWatermarkLua()
+    {
+        if (Player == null) return null;
         var watermark = ConfigManager.Config.ServerOption.Watermark;
-        if (!watermark.Enabled) return;
+        if (!watermark.Enabled) return null;
 
         var nickname = Player.Data.Name ?? "";
         var uid = Player.Uid.ToString();
@@ -66,7 +86,7 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
         var lines = new List<string>();
         if (!string.IsNullOrWhiteSpace(line1)) lines.Add(line1);
         if (!string.IsNullOrWhiteSpace(line2)) lines.Add(line2);
-        if (lines.Count == 0) return;
+        if (lines.Count == 0) return null;
 
         var luaText = EscapeLuaString(string.Join("\n", lines));
         var fontSize = watermark.FontSize.ToString(CultureInfo.InvariantCulture);
@@ -90,8 +110,7 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
             "local status, err = pcall(modify_texts)\n" +
             "if not status then on_error(err) end\n";
 
-        var pkt = new HandshakePacket(System.Text.Encoding.UTF8.GetBytes(lua));
-        await SendPacket(pkt.BuildPacket());
+        return lua;
     }
 
     private static string BuildWatermarkLine(string template, string nickname, string uid, string version,
@@ -167,7 +186,7 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
                 KcpConversationReceiveResult result;
                 try
                 {
-                    
+                    // WaitToReceiveAsync call completes when there is at least one message is received or the transport is closed.
                     result = await Conversation.WaitToReceiveAsync(CancelToken.Token);
                 }
                 catch (OperationCanceledException) when (CancelToken.IsCancellationRequested)
@@ -188,8 +207,8 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
                 var buffer = ArrayPool<byte>.Shared.Rent(result.BytesReceived);
                 try
                 {
-                    
-                    
+                    // TryReceive should not return false here, unless the transport is closed.
+                    // So we don't need to check for result.TransportClosed.
                     if (!Conversation.TryReceive(buffer, out result))
                     {
                         Logger.Error("Failed to receive packet");
@@ -216,7 +235,7 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
         Stop();
     }
 
-    
+    // DO THE PROCESSING OF THE GAME PACKET
     private async Task ProcessMessageAsync(Memory<byte> data)
     {
         var gamePacket = data.ToArray();
@@ -226,25 +245,37 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
         await using MemoryStream ms = new(gamePacket);
         using BinaryReader br = new(ms);
 
-        
+        // Handle
         try
         {
             while (br.BaseStream.Position < br.BaseStream.Length)
             {
-                
+                // Length
                 if (br.BaseStream.Length - br.BaseStream.Position < 12) return;
-                
+                // Packet sanity check
                 var magic1 = br.ReadUInt32BE();
                 if (magic1 != 0x9D74C714)
                 {
                     Logger.Error($"Bad Data Package Received: got 0x{magic1:X}, expect 0x9D74C714");
-                    return; 
+                    return; // Bad packet
                 }
 
-                
+                // Data
                 var opcode = br.ReadUInt16BE();
                 var headerLength = br.ReadUInt16BE();
                 var payloadLength = br.ReadUInt32BE();
+
+                // Reject claimed lengths that exceed what's actually left in the buffer before
+                // calling ReadBytes — BinaryReader.ReadBytes allocates the full requested array
+                // up front, so an unchecked huge payloadLength is a remote memory-exhaustion vector.
+                var remaining = br.BaseStream.Length - br.BaseStream.Position;
+                if (headerLength + (long)payloadLength > remaining)
+                {
+                    Logger.Error(
+                        $"Bad Data Package Received: header/payload length ({headerLength}+{payloadLength}) exceeds remaining buffer ({remaining})");
+                    return;
+                }
+
                 var header = br.ReadBytes(headerLength);
                 var payload = br.ReadBytes((int)payloadLength);
                 LogPacket("Recv", opcode, payload);
@@ -259,13 +290,13 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
 
     private async Task HandlePacket(ushort opcode, byte[] header, byte[] payload)
     {
-        
+        // check if it's a custom packet
         var action = GetCurActionData();
         var packetName = LogMap.GetValueOrDefault(opcode);
 
         if (action is { Action: PacketActionTypeEnum.WaitForPacket } && action.Param.PacketName == packetName)
         {
-            
+            // while run action
             var interrupt = action.Param.InterruptFormalHandler;
             while (true)
             {
@@ -296,27 +327,20 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
                 return;
         }
 
-        
+        // Find the Handler for this opcode
         var handler = HandlerManager.GetHandler(opcode);
         if (handler != null)
         {
-            
-            
+            // Handle
+            // Make sure session is ready for packets
             var state = State;
-            switch (opcode)
+            switch (state)
             {
-                case CmdIds.PlayerGetTokenCsReq:
-                {
-                    if (state != SessionStateEnum.WAITING_FOR_TOKEN) return;
-                    goto default;
-                }
-                case CmdIds.PlayerLoginCsReq:
-                {
-                    if (state != SessionStateEnum.WAITING_FOR_LOGIN) return;
-                    goto default;
-                }
-                default:
-                    break;
+                case SessionStateEnum.WAITING_FOR_TOKEN when opcode != CmdIds.PlayerGetTokenCsReq:
+                case SessionStateEnum.WAITING_FOR_LOGIN when opcode != CmdIds.PlayerLoginCsReq:
+                case SessionStateEnum.ACTIVE
+                    when opcode == CmdIds.PlayerGetTokenCsReq || opcode == CmdIds.PlayerLoginCsReq:
+                    return;
             }
 
             try
@@ -327,33 +351,33 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
             {
                 Logger.Error("An error occured ", e);
 
-                
+                // get the packet rsp and set retCode to Retcode.RetFail
                 var curPacket = LogMap.GetValueOrDefault(opcode);
                 if (curPacket == null) return;
 
-                var rspName = curPacket.Replace("Cs", "Sc").Replace("Req", "Rsp"); 
-                if (rspName == curPacket) return; 
+                var rspName = curPacket.Replace("Cs", "Sc").Replace("Req", "Rsp"); // Get the response packet name
+                if (rspName == curPacket) return; // do not send rsp when resp name = recv name
                 if (!TryGetOpcodeByName(rspName, out var rspOpcode)) return;
 
-                
+                // get proto class
                 var typ = AppDomain.CurrentDomain.GetAssemblies()
                     .SingleOrDefault(assembly => assembly.GetName().Name == "March7thHoney.Proto")!.GetTypes()
-                    .First(t => t.Name == rspName); 
+                    .First(t => t.Name == rspName); //get the type using the packet name
                 var curTyp = AppDomain.CurrentDomain.GetAssemblies()
                     .SingleOrDefault(assembly => assembly.GetName().Name == "March7thHoney.Proto")!.GetTypes()
-                    .First(t => t.Name == curPacket); 
+                    .First(t => t.Name == curPacket); //get the type using the packet name
 
-                
+                // create the response packet
                 if (Activator.CreateInstance(typ) is not IMessage rsp) return;
 
-                
+                // set the retCode to Retcode.RetFail
                 var retCode = typ.GetProperty("Retcode");
                 retCode?.SetValue(rsp, (uint)Retcode.RetFail);
 
-                
+                // get the same field in req and rsp
                 var descriptor =
                     curTyp.GetProperty("Descriptor", BindingFlags.Public | BindingFlags.Static)?.GetValue(
-                        null, null) as MessageDescriptor; 
+                        null, null) as MessageDescriptor; // get the static property Descriptor
                 var reqPacket = descriptor?.Parser.ParseFrom(payload);
 
                 foreach (var propertyInfo in curTyp.GetProperties())
@@ -367,7 +391,7 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
                     }
                 }
 
-                
+                // send the response packet
                 var packet = new BasePacket((ushort)rspOpcode);
                 packet.SetData(rsp);
                 await SendPacket(packet);
@@ -376,15 +400,19 @@ public class Connection(KcpConversation conversation, IPEndPoint remote) : March
             return;
         }
 
-        
-        
+        // No handler found
+        // 教程请求收到任何响应都会让客户端弹出本不该出现的教程界面，与 csproj 排除这三个 handler 同源
+        if (opcode == CmdIds.GetTutorialCsReq || opcode == CmdIds.GetTutorialGuideCsReq ||
+            opcode == CmdIds.UnlockTutorialCsReq) return;
+
+        // get the packet name
         if (packetName == null) return;
 
-        var respName = packetName.Replace("Cs", "Sc").Replace("Req", "Rsp"); 
-        if (respName == packetName) return; 
+        var respName = packetName.Replace("Cs", "Sc").Replace("Req", "Rsp"); // Get the response packet name
+        if (respName == packetName) return; // do not send rsp when resp name = recv name
         if (!TryGetOpcodeByName(respName, out var respOpcode)) return;
 
-        
+        // Send Rsp
         await SendPacket(respOpcode);
     }
 

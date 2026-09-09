@@ -1,4 +1,4 @@
-using March7thHoney.GameServer.Game.Activity.Activities.DiceCombat;
+using March7thHoney.GameServer.Game.MultiPlayer.DiceCombat;
 using March7thHoney.GameServer.Server.Packet.Send.DiceCombat;
 using March7thHoney.Kcp;
 

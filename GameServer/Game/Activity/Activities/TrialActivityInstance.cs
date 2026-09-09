@@ -18,15 +18,24 @@ public class TrialActivityInstance : BaseActivityInstance
     {
         var player = ActivityManager.Player;
 
+        GameData.AvatarDemoConfigData.TryGetValue(stageId, out var excel);
+        if (excel == null)
+        {
+            ActivityManager.TrialActivityInstance = null;
+            await player.SendPacket(new PacketStartTrialActivityScRsp((uint)stageId, Retcode.RetReqParaInvalid));
+            return;
+        }
+
         await player.LineupManager!.DestroyExtraLineup(ExtraLineupType.LineupStageTrial);
 
-        GameData.AvatarDemoConfigData.TryGetValue(stageId, out var excel);
-        if (excel != null)
-        {
-            Data.CurTrialStageId = stageId;
-            player.LineupManager.SetExtraLineup(ExtraLineupType.LineupStageTrial, excel.TrialAvatarList.ToList(), true);
-            await player.EnterScene(excel.MapEntranceID, 0, true);
-        }
+        // Capture the current scene so EndActivity can return the player to it
+        Data.ReturnEntryId = player.Data.EntryId;
+        Data.ReturnPos = player.Data.Pos!;
+        Data.ReturnRot = player.Data.Rot!;
+
+        Data.CurTrialStageId = stageId;
+        player.LineupManager.SetExtraLineup(ExtraLineupType.LineupStageTrial, excel.TrialAvatarList.ToList(), true);
+        await player.EnterScene(excel.MapEntranceID, 0, true);
 
         await player.SendPacket(new PacketStartTrialActivityScRsp((uint)stageId));
     }
@@ -34,22 +43,33 @@ public class TrialActivityInstance : BaseActivityInstance
     public async ValueTask EndActivity(TrialActivityStatus status = TrialActivityStatus.None)
     {
         var player = ActivityManager.Player!;
+        var stageId = Data.CurTrialStageId;
+        Data.CurTrialStageId = 0;
+        ActivityManager.TrialActivityInstance = null;
 
-        
+        // Remove trial lineup
         await player.LineupManager!.DestroyExtraLineup(ExtraLineupType.LineupStageTrial);
-        player.LineupManager!.LineupData.CurExtraLineup = -1;
+        player.LineupManager!.SetExtraLineup(ExtraLineupType.LineupNone, []);
 
-        
-        await player.EnterScene(2000101, 0, true);
+        // Return to the scene the trial was started from
+        if (Data.ReturnEntryId != 0)
+        {
+            await player.EnterScene(Data.ReturnEntryId, 0, true);
+            await player.MoveTo(Data.ReturnPos, Data.ReturnRot);
+        }
+        else
+        {
+            await player.EnterScene(2000101, 0, true);
+        }
+
+        Data.ReturnEntryId = 0;
         if (status == TrialActivityStatus.Finish)
         {
             Data.Activities.Add(new TrialActivityResultData
             {
-                StageId = Data.CurTrialStageId
+                StageId = stageId
             });
-            await player.SendPacket(new PacketCurTrialActivityScNotify((uint)Data.CurTrialStageId, status));
+            await player.SendPacket(new PacketCurTrialActivityScNotify((uint)stageId, status));
         }
-
-        Data.CurTrialStageId = 0;
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using March7thHoney.Data.Config.Task;
 using March7thHoney.GameServer.Game.Scene;
 using March7thHoney.GameServer.Game.Scene.Entity;
@@ -8,6 +9,7 @@ using March7thHoney.Util;
 
 namespace March7thHoney.GameServer.Game.Task.AvatarTask;
 
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
 public class SummonUnitLevelTask
 {
     #region Task Condition
@@ -25,23 +27,24 @@ public class SummonUnitLevelTask
 
     #region Manage
 
-    public void TriggerTasks(List<TaskConfigInfo> tasks, List<BaseGameEntity> targetEntities,
+    public async ValueTask TriggerTasks(List<TaskConfigInfo> tasks, List<BaseGameEntity> targetEntities,
         EntitySummonUnit? summonUnit)
     {
-        foreach (var task in tasks) TriggerTask(task, targetEntities, summonUnit);
+        foreach (var task in tasks) await TriggerTask(task, targetEntities, summonUnit);
     }
 
-    public void TriggerTask(TaskConfigInfo act, List<BaseGameEntity> targetEntities, EntitySummonUnit? summonUnit)
+    public async ValueTask TriggerTask(TaskConfigInfo act, List<BaseGameEntity> targetEntities,
+        EntitySummonUnit? summonUnit)
     {
         try
         {
             var methodName = act.Type.Replace("RPG.GameCore.", "");
 
-            
+            // try to get from cache
             var method = GetOrCreateExecuteTask(methodName);
             if (method == null) return;
 
-            method(act, targetEntities, summonUnit);
+            await method(act, targetEntities, summonUnit);
         }
         catch (Exception e)
         {
@@ -51,13 +54,13 @@ public class SummonUnitLevelTask
 
     private ExecuteTask? GetOrCreateExecuteTask(string methodName)
     {
-        
+        // try to get from cache
         if (_cachedTasks.TryGetValue(methodName, out var method)) return method;
         var methodProp = GetType().GetMethod(methodName);
         if (methodProp == null) return null;
 
         method = (ExecuteTask)Delegate.CreateDelegate(typeof(ExecuteTask), this, methodProp);
-        _cachedTasks[methodName] = method; 
+        _cachedTasks[methodName] = method; // cached
 
         return method;
     }
@@ -76,7 +79,7 @@ public class SummonUnitLevelTask
     {
         if (act is PredicateTaskList predicateTaskList)
         {
-            
+            // handle predicateCondition
             var methodName = predicateTaskList.Predicate.Type.Replace("RPG.GameCore.", "");
 
             var method = GetOrCreateExecuteTask(methodName);
@@ -85,10 +88,10 @@ public class SummonUnitLevelTask
             var resp = await method(predicateTaskList.Predicate, targetEntities, summonUnit);
             if (resp is true)
                 foreach (var task in predicateTaskList.SuccessTaskList)
-                    TriggerTask(task, targetEntities, summonUnit);
+                    await TriggerTask(task, targetEntities, summonUnit);
             else
                 foreach (var task in predicateTaskList.FailedTaskList)
-                    TriggerTask(task, targetEntities, summonUnit);
+                    await TriggerTask(task, targetEntities, summonUnit);
         }
 
         return null;
@@ -177,10 +180,10 @@ public class SummonUnitLevelTask
             }
             else
             {
-                prop.Scene.Player.InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
+                await prop.Scene.Player.InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
             }
 
-            
+            // Rogue module removed in current baseline.
         }
 
         return null;
@@ -188,4 +191,3 @@ public class SummonUnitLevelTask
 
     #endregion
 }
-

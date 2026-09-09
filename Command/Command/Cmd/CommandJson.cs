@@ -54,7 +54,7 @@ public class CommandJson : ICommand
             if (removedItems.Count > 0)
                 await player.SendPacket(new PacketPlayerSyncScNotify(removedItems));
 
-            DatabaseHelper.ToSaveUidList.Add(player.Uid);
+            DatabaseHelper.MarkDirty(player.Uid);
             await arg.SendMsg(I18NManager.Translate("Game.Command.Json.ClearInventory"));
             return;
         }
@@ -120,7 +120,8 @@ public class CommandJson : ICommand
         {
             if (msg[0] == "Game.Command.Json.ImportSummary")
             {
-                await arg.SendMsg(I18NManager.Translate("Game.Command.Json.ImportSummary", Path.GetFileName(selectedPath), msg[1], msg[2], msg[3]));
+                await arg.SendMsg(I18NManager.Translate("Game.Command.Json.ImportSummary", Path.GetFileName(selectedPath),
+                    msg[1], msg[2], msg[3], msg[4], msg[5]));
             } else
             {
                 await arg.SendMsg(I18NManager.Translate(msg[0], msg.Skip(1).ToArray()));
@@ -157,7 +158,7 @@ public class CommandJson : ICommand
         if (looksLikePath)
             return Path.GetFullPath(input);
 
-        
+        // Treat as filename under configured json directories.
         var jsonDirs = GetJsonDirectories(createIfMissing: true);
         var fileName = input.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? input : input + ".json";
         foreach (var jsonDir in jsonDirs)
@@ -168,7 +169,7 @@ public class CommandJson : ICommand
             if (File.Exists(candidate)) return candidate;
         }
 
-        
+        // Fallback to primary directory.
         return Path.Combine(jsonDirs[0].FullName, fileName);
     }
 

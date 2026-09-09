@@ -10,7 +10,7 @@ public class PacketTrainPartyBuildRoomScNotify : BasePacket
     {
         SetData(new TrainPartyBuildRoomScNotify
         {
-            MBIEMBJMJJN = player.TrainPartyManager!.ToPartyInfo()
+            CPMHKECPBOJ = player.TrainPartyManager!.ToPartyInfo()
         });
     }
 }

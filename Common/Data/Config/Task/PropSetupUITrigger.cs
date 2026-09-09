@@ -1,8 +1,10 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class PropSetupUITrigger : TaskConfigInfo
+[MemoryPackable]
+public partial class PropSetupUITrigger : TaskConfigInfo
 {
     public string ColliderRelativePath { get; set; } = string.Empty;
     public bool DestroyAfterTriggered { get; set; }
@@ -11,20 +13,20 @@ public class PropSetupUITrigger : TaskConfigInfo
 
     public string ButtonIcon { get; set; } = string.Empty;
 
-    
-    
-    
+    //DialogueIconType IconType;
+    //TextID ButtonText;
+    //DynamicString ButtonTextCustom;
     public List<TaskConfigInfo> ButtonCallback { get; set; } = [];
     public bool ForceInteractInDanger { get; set; }
     public bool ConsiderAngleLimit { get; set; }
 
     public float InteractAngleRange { get; set; }
 
-    
+    //EntityType[] OverrideTargetTypes;
     public bool TriggerByFakeAvatar { get; set; }
     public bool SkipFakeAvatar { get; set; }
-    public PredicateConfigInfo OnEnterFilter { get; set; } = new();
-    public TargetEvaluator TargetType { get; set; } = new();
+    public PredicateConfigInfo OnEnterFilter { get; set; } = new UnknownPredicateConfigInfo();
+    public TargetEvaluator TargetType { get; set; } = new UnknownTargetEvaluator();
 
     public new static TaskConfigInfo LoadFromJsonObject(JObject obj)
     {
@@ -44,7 +46,7 @@ public class PropSetupUITrigger : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.TargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 

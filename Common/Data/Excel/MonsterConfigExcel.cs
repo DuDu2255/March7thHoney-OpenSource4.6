@@ -1,7 +1,11 @@
+using MemoryPack;
 namespace March7thHoney.Data.Excel;
 
-[ResourceEntity("MonsterConfig.json")]
-public class MonsterConfigExcel : ExcelResource
+// 4.4 splits NPC monsters out to MonsterUniqueConfig.json; merged resource trees
+// keep them in the main table, so first-loaded wins via TryAdd.
+[ResourceEntity("MonsterConfig.json,MonsterUniqueConfig.json", true)]
+[MemoryPackable]
+public partial class MonsterConfigExcel : ExcelResource
 {
     public int MonsterID { get; set; }
     public int MonsterTemplateID { get; set; }
@@ -15,6 +19,6 @@ public class MonsterConfigExcel : ExcelResource
 
     public override void Loaded()
     {
-        GameData.MonsterConfigData.Add(MonsterID, this);
+        GameData.MonsterConfigData.TryAdd(MonsterID, this);
     }
 }

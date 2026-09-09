@@ -10,12 +10,12 @@ public class HandlerTrainPartyTakeBuildLevelAwardCsReq : Handler
     {
         var req = TrainPartyTakeBuildLevelAwardCsReq.Parser.ParseFrom(data);
         var manager = connection.Player!.TrainPartyManager!;
-        var ret = manager.TakeBuildLevelAward(req.HBLOHOFKKKO, out var items);
+        // 4.4 TakeBuildLevelAward req carries no level field; awards are not driven under the display-layer port.
+        var ret = manager.TakeBuildLevelAward(out var items);
 
         var rsp = new BasePacket(CmdIds.TrainPartyTakeBuildLevelAwardScRsp);
         rsp.SetData(new TrainPartyTakeBuildLevelAwardScRsp
         {
-            HBLOHOFKKKO = req.HBLOHOFKKKO,
             ItemList = items,
             Retcode = ret
         });

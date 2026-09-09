@@ -3,6 +3,7 @@ using March7thHoney.Database.Inventory;
 using March7thHoney.Database.TrainParty;
 using March7thHoney.Enums.Avatar;
 using March7thHoney.Enums.Item;
+using March7thHoney.GameServer.Server.Packet.Send.Avatar;
 using March7thHoney.GameServer.Server.Packet.Send.PlayerSync;
 using March7thHoney.Internationalization;
 
@@ -64,7 +65,7 @@ public class CommandGiveall : ICommand
             }
         }
 
-        await player.SendPacket(new PacketPlayerSyncScNotify(player.AvatarManager!.AvatarData.FormalAvatars));
+        await player.SendPacket(new PacketPlayerSyncScNotify(player.AvatarManager!.Data.FormalAvatars));
 
         await arg.SendMsg(I18NManager.Translate("Game.Command.GiveAll.GiveAllItems",
             I18NManager.Translate("Word.Avatar"), "1"));
@@ -93,7 +94,7 @@ public class CommandGiveall : ICommand
             return;
         }
 
-        var lightconeList = GameData.EquipmentConfigData.Values;
+        var lightconeList = GameData.EquipmentConfigData.Values.Where(x => x.Release);
         var items = new List<ItemData>();
 
         for (var i = 0; i < amount; i++)
@@ -247,13 +248,40 @@ public class CommandGiveall : ICommand
                     material.ItemSubType == ItemSubTypeEnum.PhoneTheme ||
                     material.ItemSubType == ItemSubTypeEnum.ChatBubble ||
                     material.ItemSubType == ItemSubTypeEnum.PersonalCard ||
-                    material.ItemSubType == ItemSubTypeEnum.PhoneCase ||
-                    material.ItemSubType == ItemSubTypeEnum.AvatarSkin ||
-                    material.ItemSubType == ItemSubTypeEnum.PlayerOutfit)
+                    material.ItemSubType == ItemSubTypeEnum.PhoneCase)
                     await player.InventoryManager!.AddItem(material.ID, 1, false);
 
         await arg.SendMsg(I18NManager.Translate("Game.Command.GiveAll.GiveAllItems",
             I18NManager.Translate("Word.Unlock"), "1"));
+    }
+
+    [CommandMethod("0 skin")]
+    public async ValueTask GiveAllSkin(CommandArg arg)
+    {
+        var player = arg.Target?.Player;
+        if (player == null)
+        {
+            await arg.SendMsg(I18NManager.Translate("Game.Command.Notice.PlayerNotFound"));
+            return;
+        }
+
+        var materialList = GameData.ItemConfigData.Values;
+        foreach (var material in materialList)
+            if (material.ItemMainType == ItemMainTypeEnum.Usable)
+                if (material.ItemSubType == ItemSubTypeEnum.AvatarSkin ||
+                    material.ItemSubType == ItemSubTypeEnum.PlayerOutfit)
+                    await player.InventoryManager!.AddItem(material.ID, 1, false);
+
+        await player.SendPacket(new PacketGetAvatarDataScRsp(player));
+
+        await arg.SendMsg(I18NManager.Translate("Game.Command.GiveAll.GiveAllItems",
+            I18NManager.Translate("Word.Skin"), "1"));
+    }
+
+    [CommandMethod("0 materials")]
+    public async ValueTask GiveAllMaterials(CommandArg arg)
+    {
+        await GiveAllMaterial(arg);
     }
 
     [CommandMethod("0 train")]
@@ -266,7 +294,7 @@ public class CommandGiveall : ICommand
             return;
         }
 
-        
+        // Reset
         player.TrainPartyManager!.Data.Fund = 1000000;
         player.TrainPartyManager!.Data.Areas.Clear();
 
@@ -299,6 +327,8 @@ public class CommandGiveall : ICommand
             if (savedData.Count > 0)
                 player.SceneData!.FloorSavedData[floorInfo.FloorID] = savedData;
         }
+
+        player.TrainPartyManager!.MarkDataDirty();
 
         await arg.SendMsg(I18NManager.Translate("Game.Command.GiveAll.GiveAllItems",
             I18NManager.Translate("Word.TrainParty"), "1"));
@@ -334,7 +364,7 @@ public class CommandGiveall : ICommand
                 (MultiPathAvatarTypeEnum)multiPathAvatar.AvatarID);
         }
 
-        await player.SendPacket(new PacketPlayerSyncScNotify(player.AvatarManager!.AvatarData.FormalAvatars));
+        await player.SendPacket(new PacketPlayerSyncScNotify(player.AvatarManager!.Data.FormalAvatars));
 
         await arg.SendMsg(I18NManager.Translate("Game.Command.GiveAll.GiveAllItems",
             I18NManager.Translate("Word.Avatar"),

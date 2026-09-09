@@ -1,3 +1,4 @@
+using JNFDGPDHENJ = March7thHoney.Proto.PlayerSqueezedScNotify.Types.AAFEHKFADDH.Types.JNFDGPDHENJ;
 using March7thHoney.Database.Account;
 using March7thHoney.GameServer.Server.Packet.Send.Player;
 using March7thHoney.Kcp;
@@ -19,7 +20,8 @@ public static class ConnectionDisconnectHelper
 
     public static Task KickByGmAsync(Connection? connection)
     {
-        return DisconnectAsync(connection, new PacketPlayerSqueezedScNotify(KickType.KickByGm));
+        return DisconnectAsync(connection,
+            new PacketPlayerSqueezedScNotify((JNFDGPDHENJ)5));
     }
 
     public static void KickBanned(Connection? connection, AccountBanStatus banStatus)
@@ -29,7 +31,8 @@ public static class ConnectionDisconnectHelper
 
     public static Task KickBannedAsync(Connection? connection, AccountBanStatus banStatus)
     {
-        return DisconnectAsync(connection, new PacketPlayerSqueezedScNotify(KickType.KickBlack,
+        return DisconnectAsync(connection, new PacketPlayerSqueezedScNotify(
+            (JNFDGPDHENJ)1,
             AccountBanHelper.ToBlackInfo(banStatus)));
     }
 

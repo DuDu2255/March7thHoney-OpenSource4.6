@@ -11,7 +11,7 @@ public class PacketDiceCombatFinishPveStageScRsp : BasePacket
         {
             Retcode = 0,
             IsWin = isWin,
-            MMLKFJIAKKH = stageId
+            MPDHNFNCIEA = stageId
         });
     }
 }

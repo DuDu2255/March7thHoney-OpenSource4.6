@@ -5,11 +5,11 @@ namespace March7thHoney.GameServer.Server.Packet.Send.TrainCakeCatch;
 
 public class PacketTrainCakeCatchDiyScRsp : BasePacket
 {
-    public PacketTrainCakeCatchDiyScRsp(FOFNOBHLKGO diy) : base(CmdIds.TrainCakeCatchDiyScRsp)
+    public PacketTrainCakeCatchDiyScRsp(BFAKMCIJFCB diy) : base(CmdIds.TrainCakeCatchDiyScRsp)
     {
         SetData(new TrainCakeCatchDiyScRsp
         {
-            PEOECDDANNP = diy
+            NLJBJMDPBGN = diy
         });
     }
 }

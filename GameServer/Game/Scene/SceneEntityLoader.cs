@@ -5,6 +5,7 @@ using March7thHoney.Enums.Mission;
 using March7thHoney.Enums.Scene;
 using March7thHoney.GameServer.Game.Scene.Entity;
 using March7thHoney.GameServer.Server.Packet.Send.Scene;
+using March7thHoney.Util;
 
 namespace March7thHoney.GameServer.Game.Scene;
 
@@ -47,12 +48,21 @@ public class SceneEntityLoader(SceneInstance scene)
                      .Where(group => !group.GroupName.Contains("DeployPuzzle_Repeat_Area"))
                      .Where(group => !group.GroupName.Contains("TrainVisiter")))
 
-            if (oldGroupId.Contains(group.Id)) 
+            if (oldGroupId.Contains(group.Id)) // check if it should be unloaded
             {
-                if (group.ForceUnloadCondition.IsTrue(Scene.Player.MissionManager!.Data,
-                        false) || 
-                    group.UnloadCondition.IsTrue(Scene.Player.MissionManager!.Data,
-                        false)) 
+                // DelayToLevelReload defers an unload to the next level (re)load: the group must stay
+                // in the scene the player is currently standing in even after its condition turns true.
+                // Ground truth: floor 80112001 group 2 (Herta) unloads on main 1000401 Finish with
+                // DelayToLevelReload set — the official server keeps her standing so the follow-on
+                // 4030001 talks can fire, and only drops her on the next entry to the floor. LoadGroup
+                // still evaluates the same condition at build time, so the deferred unload applies
+                // naturally on the next scene build. "Force" overrides the delay by definition.
+                var forceUnload = !group.ForceUnloadCondition.DelayToLevelReload &&
+                                  group.ForceUnloadCondition.IsTrue(Scene.Player.MissionManager!.Data, false);
+                var unload = !group.UnloadCondition.DelayToLevelReload &&
+                             group.UnloadCondition.IsTrue(Scene.Player.MissionManager!.Data, false);
+
+                if (forceUnload || unload) // any of the conditions is true then unload
                 {
                     foreach (var entity in Scene.Entities.Values.Where(entity => entity.GroupId == group.Id))
                     {
@@ -65,7 +75,7 @@ public class SceneEntityLoader(SceneInstance scene)
                 }
                 else if (group.OwnerMainMissionID != 0 &&
                          Scene.Player.MissionManager!.GetMainMissionStatus(group.OwnerMainMissionID) !=
-                         MissionPhaseEnum.Accept) 
+                         MissionPhaseEnum.Accept) // condition: Owner Main Mission ID
                 {
                     foreach (var entity in Scene.Entities.Values.Where(entity => entity.GroupId == group.Id))
                     {
@@ -78,7 +88,7 @@ public class SceneEntityLoader(SceneInstance scene)
                 }
                 else if (!group.SavedValueCondition.IsTrue(
                              Scene.Player.SceneData!
-                                 .GetFloorSavedValues(Scene.FloorId))) 
+                                 .GetFloorSavedValues(Scene.FloorId))) // condition: Saved Value Condition
                 {
                     foreach (var entity in Scene.Entities.Values.Where(entity => entity.GroupId == group.Id))
                     {
@@ -104,7 +114,7 @@ public class SceneEntityLoader(SceneInstance scene)
                     Scene.Groups.Remove(group.Id);
                 }
             }
-            else 
+            else // check if it should be loaded
             {
                 var groupList = await LoadGroup(group);
                 refreshed = groupList != null || refreshed;
@@ -117,22 +127,22 @@ public class SceneEntityLoader(SceneInstance scene)
 
     public virtual async ValueTask<List<BaseGameEntity>?> LoadGroup(GroupInfo info, bool forceLoad = false)
     {
-        if (!LoadGroups.Contains(info.Id)) return null; 
-        var missionData = Scene.Player.MissionManager!.Data; 
-        if (info.LoadSide == GroupLoadSideEnum.Client) return null; 
-        if (info.GroupName.Contains("TrainVisitor")) return null; 
+        if (!LoadGroups.Contains(info.Id)) return null; // check if group should be loaded in this dimension
+        var missionData = Scene.Player.MissionManager!.Data; // get mission data
+        if (info.LoadSide == GroupLoadSideEnum.Client) return null; // check if group should be loaded on client side
+        if (info.GroupName.Contains("TrainVisitor")) return null; // certain group name
         if (info.GroupName.Contains("DeployPuzzle_Repeat_Area")) return null;
         if (info.GroupName.Contains("TrainVisiter")) return null;
 
-        if (info.SystemUnlockCondition != null) 
+        if (info.SystemUnlockCondition != null) // condition: System Unlock Condition
         {
-            var result = info.SystemUnlockCondition.Operation != OperationEnum.Or; 
+            var result = info.SystemUnlockCondition.Operation != OperationEnum.Or; // operation
             foreach (var conditionId in info.SystemUnlockCondition.Conditions)
             {
                 GameData.GroupSystemUnlockDataData.TryGetValue(conditionId, out var unlockExcel);
                 if (unlockExcel == null) continue;
                 var part = Scene.Player.QuestManager?.UnlockHandler.GetUnlockStatus(unlockExcel.UnlockID) ??
-                           false; 
+                           false; // check if unlock condition is met
                 if (info.SystemUnlockCondition.Operation == OperationEnum.Or && part)
                 {
                     result = true;
@@ -153,33 +163,33 @@ public class SceneEntityLoader(SceneInstance scene)
             if (!result) return null;
         }
 
-        if (!(info.OwnerMainMissionID == 0 || 
+        if (!(info.OwnerMainMissionID == 0 || // condition: Owner Main Mission ID
               Scene.Player.MissionManager!.GetMainMissionStatus(info.OwnerMainMissionID) ==
-              MissionPhaseEnum.Accept)) return null; 
+              MissionPhaseEnum.Accept)) return null; // check if main mission is accepted
 
         if ((!info.LoadCondition.IsTrue(missionData) ||
              info.UnloadCondition.IsTrue(missionData,
-                 false) || 
+                 false) || // condition: Load Condition, Unload Condition, Force Unload Condition
              info.ForceUnloadCondition.IsTrue(missionData, false)) &&
-            !forceLoad) return null; 
+            !forceLoad) return null; // check if group should be loaded forcefully
 
         if (!info.SavedValueCondition.IsTrue(
                 Scene.Player.SceneData!.FloorSavedData.GetValueOrDefault(Scene.FloorId, [])) &&
-            !forceLoad) 
+            !forceLoad) // condition: Saved Value Condition
             return null;
 
         if (Scene.Entities.Values.ToList().FindIndex(x => x.GroupId == info.Id) !=
-            -1) 
+            -1) // check if group is already loaded
             return null;
 
         if (info.RelatedBattleId.Count > 0 && !Scene.Player.MissionManager!.GetRunningSubMissionList().Any(x =>
                 x.FinishType == MissionFinishTypeEnum.StageWin && info.RelatedBattleId.Contains(x.ParamInt1)))
-            return null; 
+            return null; // mission not activated
 
-        
+        // TODO atmosphere conditions
 
-        
-        Scene.Groups.Add(info.Id); 
+        // load
+        Scene.Groups.Add(info.Id); // add group to loaded groups
 
         var entityList = new List<BaseGameEntity>();
         foreach (var npc in info.NPCList)
@@ -189,7 +199,7 @@ public class SceneEntityLoader(SceneInstance scene)
             }
             catch
             {
-                
+                // ignored
             }
 
         foreach (var monster in info.MonsterList)
@@ -199,7 +209,7 @@ public class SceneEntityLoader(SceneInstance scene)
             }
             catch
             {
-                
+                // ignored
             }
 
         foreach (var prop in info.PropList)
@@ -209,7 +219,7 @@ public class SceneEntityLoader(SceneInstance scene)
             }
             catch
             {
-                
+                // ignored
             }
 
         return entityList;
@@ -251,7 +261,7 @@ public class SceneEntityLoader(SceneInstance scene)
 
     public virtual async ValueTask<EntityNpc?> LoadNpc(NpcInfo info, GroupInfo group, bool sendPacket = false)
     {
-        if (info.IsClientOnly || info.IsDelete) return null;
+        if (info.IsClientOnly || info.IsDelete || !info.LoadOnInitial) return null;
 
         if (!GameData.NpcDataData.ContainsKey(info.NPCID)) return null;
 
@@ -277,8 +287,8 @@ public class SceneEntityLoader(SceneInstance scene)
 
     public virtual async ValueTask<EntityProp?> LoadProp(PropInfo info, GroupInfo group, bool sendPacket = false)
     {
-        
-        
+        // Runtime floor/group exports are not always consistent for IsClientOnly/LoadOnInitial on props.
+        // Keep server-side prop availability driven by group-level loading and explicit deletion only.
         if (info.IsDelete) return null;
 
         GameData.MazePropData.TryGetValue(info.PropID, out var excel);
@@ -292,9 +302,9 @@ public class SceneEntityLoader(SceneInstance scene)
             await prop.SetState(PropStateEnum.CheckPointEnable);
         }
 
-        
+        // load from database
         var propData = Scene.Player.GetScenePropData(Scene.FloorId, group.Id, info.ID);
-        var hasSavedState = propData != null && Scene.Excel.PlaneType != PlaneTypeEnum.Raid; 
+        var hasSavedState = propData != null && Scene.Excel.PlaneType != PlaneTypeEnum.Raid; // raid is not saved
         if (hasSavedState)
         {
             prop.State = propData!.State;
@@ -304,9 +314,13 @@ public class SceneEntityLoader(SceneInstance scene)
             if (Scene.Excel.PlaneType == PlaneTypeEnum.Raid)
                 prop.State = info.State;
             else
-                
+                // elevator
                 prop.State = prop.Excel.PropType == PropTypeEnum.PROP_ELEVATOR ? PropStateEnum.Elevator1 : info.State;
         }
+
+        // Missions off: open doors so they don't block the way.
+        if (!Scene.Player.MissionEnabled && !hasSavedState && prop.Excel.IsDoor)
+            prop.State = PropStateEnum.Open;
 
         var timelineData = Scene.Player.GetScenePropTimelineData(Scene.FloorId, group.Id, info.ID);
         prop.PropTimelineData = timelineData;
@@ -318,7 +332,7 @@ public class SceneEntityLoader(SceneInstance scene)
             return prop;
         }
 
-        
+        // Only apply default "Case -> Closed" normalization when there is no persisted state.
         if (!hasSavedState && prop.PropInfo.Name.Contains("Case") && prop.State == PropStateEnum.Open)
             await prop.SetState(PropStateEnum.Closed);
 
@@ -330,7 +344,7 @@ public class SceneEntityLoader(SceneInstance scene)
 
         if (prop.PropInfo.PropID is 104006 or 104005) await prop.SetState(PropStateEnum.Open);
 
-        
+        // Destructibles that were already opened should not respawn on reload.
         if (prop.Excel.PropType == PropTypeEnum.PROP_DESTRUCT && prop.State == PropStateEnum.Open) return null;
 
         await Scene.AddEntity(prop, sendPacket);

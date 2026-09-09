@@ -5,15 +5,13 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Friend;
 
 [Opcode(CmdIds.SetFriendMarkCsReq)]
-public class HandlerSetFriendMarkCsReq : Handler
+public class HandlerSetFriendMarkCsReq : Handler<SetFriendMarkCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetFriendMarkCsReq req)
     {
-        var req = SetFriendMarkCsReq.Parser.ParseFrom(data);
+        player.FriendManager!.MarkFriend((int)req.Uid, req.BIJJOJNJHDO);
 
-        connection.Player!.FriendManager!.MarkFriend((int)req.Uid, req.KBNKNAHGPHG);
-
-        await connection.SendPacket(new PacketSetFriendMarkScRsp(req.Uid, req.KBNKNAHGPHG));
+        await connection.SendPacket(new PacketSetFriendMarkScRsp(req.Uid, req.BIJJOJNJHDO));
     }
 }
 

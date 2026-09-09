@@ -18,7 +18,7 @@ public class MissionHandlerEnterMapByEntrance : MissionFinishTypeHandler
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // this type wont be used in quest
         if (arg is MapEntranceExcel v)
             if (v.ID == excel.ParamInt1)
                 await player.QuestManager!.AddQuestProgress(quest.QuestID, 1);

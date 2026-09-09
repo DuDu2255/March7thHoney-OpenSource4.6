@@ -1,10 +1,12 @@
+using MemoryPack;
 using March7thHoney.Data.Custom;
 using March7thHoney.Util;
 
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("RogueTournBuffGroup.json")]
-public class RogueTournBuffGroupExcel : BaseRogueBuffGroupExcel
+[MemoryPackable]
+public partial class RogueTournBuffGroupExcel : BaseRogueBuffGroupExcel
 {
     public int RogueBuffGroupID { get; set; }
     public List<int> RogueBuffDrop { get; set; } = [];
@@ -39,7 +41,7 @@ public class RogueTournBuffGroupExcel : BaseRogueBuffGroupExcel
             }
             else
             {
-                
+                // might is group id
                 if (!GameData.RogueBuffGroupData.TryGetValue(buffId, out var group)) continue;
                 if (group is not RogueTournBuffGroupExcel e) continue;
                 e.LoadBuff();

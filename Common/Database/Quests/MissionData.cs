@@ -1,33 +1,41 @@
+using MemoryPack;
 using March7thHoney.Enums.Mission;
 using March7thHoney.Util;
-using SqlSugar;
 
 namespace March7thHoney.Database.Quests;
 
-[SugarTable("Mission")]
+[DbTable("Mission")]
 public class MissionData : BaseDatabaseDataHelper
 {
-    [SugarColumn(IsJson = true, ColumnDataType = "TEXT")]
     public Dictionary<int, Dictionary<int, MissionInfo>> MissionInfo { get; set; } =
-        []; 
+        []; // Dictionary<MissionId, Dictionary<SubMissionId, MissionInfo>> // seems like main missionId is not used
 
-    [SugarColumn(IsJson = true)]
     public Dictionary<int, MissionPhaseEnum> MainMissionInfo { get; set; } =
-        []; 
+        []; // Dictionary<MissionId, MissionPhaseEnum>
 
-    [SugarColumn(IsJson = true, ColumnDataType = "text")]
     public List<int> FinishedSubMissionIds { get; set; } = [];
 
-    [SugarColumn(IsJson = true, ColumnDataType = "text")]
     public List<int> RunningSubMissionIds { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<int> FinishedMainMissionIds { get; set; } = [];
+    public List<int> FinishedMainMissionIds { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<int> RunningMainMissionIds { get; set; } = [];
+    public List<int> RunningMainMissionIds { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public Dictionary<int, int> SubMissionProgressDict { get; set; } = [];
+    public Dictionary<int, int> SubMissionProgressDict { get; set; } = [];
+
+    public Dictionary<int, List<MissionCustomValueRecord>> MainMissionCustomValues { get; set; } = [];
 
     public int TrackingMainMissionId { get; set; }
+
+    /// <summary>
+    ///     Per-player override of ServerOption.EnableMission; null means "follow the server config".
+    ///     /mission start sets it so a single player can play the story on a server that otherwise runs
+    ///     with the mission system off.
+    /// </summary>
+    public bool? EnableMissionOverride { get; set; }
+
+    /// <summary>Whether the mission system is live for this player. Get-only, so it is not a DB column.</summary>
+    public bool MissionEnabled => EnableMissionOverride ?? ConfigManager.Config.ServerOption.EnableMission;
 
     public MissionPhaseEnum GetMainMissionStatus(int missionId)
     {
@@ -100,8 +108,17 @@ public class MissionData : BaseDatabaseDataHelper
     }
 }
 
-public class MissionInfo
+[MemoryPackable]
+public partial class MissionInfo
 {
     public int MissionId { get; set; }
     public MissionPhaseEnum Status { get; set; }
+}
+
+[MemoryPackable]
+public partial class MissionCustomValueRecord
+{
+    public uint Index { get; set; }
+    public uint CustomValue { get; set; }
+    public string Key { get; set; } = "";
 }

@@ -17,11 +17,11 @@ public class MissionHandlerSubMissionFinishCnt : MissionFinishTypeHandler
             if (status == MissionPhaseEnum.Finish || status == MissionPhaseEnum.Cancel) finishCount++;
         }
 
-        if (finishCount >= info.Progress) 
+        if (finishCount >= info.Progress) // finish count >= progress, finish mission
         {
             await player.MissionManager!.FinishSubMission(info.ID);
         }
-        else 
+        else // update progress
         {
             if (player.MissionManager!.GetMissionProgress(info.ID) != finishCount)
                 await player.MissionManager!.SetMissionProgress(info.ID, finishCount);

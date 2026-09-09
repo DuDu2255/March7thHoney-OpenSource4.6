@@ -1,18 +1,20 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class AdventureTriggerAttack : TaskConfigInfo
+[MemoryPackable]
+public partial class AdventureTriggerAttack : TaskConfigInfo
 {
-    public TargetEvaluator AttackTargetType { get; set; } = new();
-    public TargetEvaluator AttackRootTargetType { get; set; } = new();
+    public TargetEvaluator AttackTargetType { get; set; } = new UnknownTargetEvaluator();
+    public TargetEvaluator AttackRootTargetType { get; set; } = new UnknownTargetEvaluator();
     public bool TriggerBattle { get; set; } = true;
 
     public float TriggerBattleDelay { get; set; }
 
-    
-    
-    
+    public AdventureAttackDetectSummonUnitTriggerConfig? SummonUnitTriggerAttackDetectConfig { get; set; }
+    // public AdventureAttackDetectShapeConfig AttackDetectConfig { get; set; }
+    // public AdventureHitConfig HitConfig { get; set; }
     public List<TaskConfigInfo> OnAttack { get; set; } = [];
     public List<TaskConfigInfo> OnBattle { get; set; } = [];
     public List<TaskConfigInfo> OnHit { get; set; } = [];
@@ -36,7 +38,7 @@ public class AdventureTriggerAttack : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.AttackTargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 
@@ -46,7 +48,7 @@ public class AdventureTriggerAttack : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.AttackRootTargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 
@@ -74,6 +76,9 @@ public class AdventureTriggerAttack : TaskConfigInfo
             info.AttackDetectCollision = value.ToObject<bool>();
         if (obj.TryGetValue(nameof(EnterBattleSelectTargetType), out value))
             info.EnterBattleSelectTargetType = value.ToObject<string>() ?? "";
+        if (obj.TryGetValue(nameof(SummonUnitTriggerAttackDetectConfig), out value))
+            info.SummonUnitTriggerAttackDetectConfig =
+                (value as JObject)?.ToObject<AdventureAttackDetectSummonUnitTriggerConfig>();
         return info;
     }
 }

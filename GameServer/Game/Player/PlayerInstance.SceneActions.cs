@@ -11,12 +11,13 @@ using March7thHoney.GameServer.Server.Packet.Send.Scene;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using static March7thHoney.GameServer.Plugin.Event.PluginEvent;
 
 namespace March7thHoney.GameServer.Game.Player;
 
 public partial class PlayerInstance
 {
+    private static readonly Logger SceneLogger = new("Scene");
+
     #region Scene Actions
 
     public async ValueTask OnMove()
@@ -49,7 +50,7 @@ public partial class PlayerInstance
             case PropTypeEnum.PROP_TREASURE_CHEST:
                 if (oldState == PropStateEnum.ChestClosed && newState == PropStateEnum.ChestUsed)
                 {
-                    
+                    // TODO: Filter treasure chest
                     var items = DropService.CalculateDropsFromProp(prop.PropInfo.ChestID);
                     await InventoryManager!.AddItems(items);
                     await SendPacket(new PacketOpenChestScNotify(prop.PropInfo.ChestID));
@@ -86,7 +87,7 @@ public partial class PlayerInstance
                             }
                             else if (p.Excel.PropType == prop.Excel.PropType)
                             {
-                                
+                                // Skip
                             }
                             else
                             {
@@ -117,7 +118,7 @@ public partial class PlayerInstance
                         }
                         else if (p.Excel.PropType == prop.Excel.PropType)
                         {
-                            
+                            // Skip
                         }
                         else
                         {
@@ -130,7 +131,7 @@ public partial class PlayerInstance
                 break;
             case PropTypeEnum.PROP_ORDINARY:
                 if (prop.PropInfo.CommonConsole)
-                    
+                    // set group
                     foreach (var p in SceneInstance.GetEntitiesInGroup<EntityProp>(prop.GroupId))
                     {
                         await p.SetState(newState);
@@ -152,7 +153,7 @@ public partial class PlayerInstance
                         .Where(p => p.PropInfo.Name.Contains("Piece")).All(p => p.State == PropStateEnum.Closed);
 
                     if (pieceDone)
-                        
+                        // set JigsawSir to open
                         foreach (var p in SceneInstance.GetEntitiesInGroup<EntityProp>(prop.GroupId)
                                      .Where(p => p.PropInfo.Name.Contains("JigsawSir") &&
                                                  p.State != PropStateEnum.Closed))
@@ -162,7 +163,7 @@ public partial class PlayerInstance
                 break;
         }
 
-        
+        // for door unlock
         if (prop.PropInfo.UnlockDoorID.Count > 0)
             foreach (var p in prop.PropInfo.UnlockDoorID.SelectMany(id =>
                          SceneInstance.GetEntitiesInGroup<EntityProp>(id.Key)
@@ -172,14 +173,13 @@ public partial class PlayerInstance
                 await MissionManager!.OnPlayerInteractWithProp();
             }
 
-        
+        // for mission
         await MissionManager!.OnPlayerInteractWithProp();
 
-        
-        InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
+        // plane event
+        await InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
 
-        
-        InvokeOnPlayerInteract(this, prop);
+        // handle plugin event
 
         var floorSavedKey = prop.PropInfo.Name.Replace("Controller_", "");
         var key = $"FSV_ML{floorSavedKey}{(config.TargetState == PropStateEnum.Open ? "Started" : "Complete")}";
@@ -193,7 +193,7 @@ public partial class PlayerInstance
 
         if (SceneInstance?.FloorInfo?.FloorSavedValue.Find(x => x.Name == key) != null)
         {
-            
+            // should save
             var plane = SceneInstance.PlaneId;
             var floor = SceneInstance.FloorId;
             SceneData!.FloorSavedData.TryGetValue(floor, out var value);
@@ -203,10 +203,10 @@ public partial class PlayerInstance
                 SceneData.FloorSavedData[floor] = value;
             }
 
-            value[key] = 1; 
+            value[key] = 1; // ParamString[2] is the key
             await SendPacket(new PacketUpdateFloorSavedValueNotify(key, 1, this));
 
-            TaskManager?.SceneTaskTrigger.TriggerFloor(plane, floor);
+            TaskManager?.SceneTaskTrigger.TriggerFloor(plane, floor, SceneInstance);
             MissionManager?.HandleFinishType(MissionFinishTypeEnum.FloorSavedValue);
         }
 
@@ -227,7 +227,7 @@ public partial class PlayerInstance
             ByteValue = info.TimelineByteValue.ToBase64()
         };
 
-        
+        // save to db
         SceneData!.PropTimelineData.TryGetValue(Data.FloorId, out var floorData);
         if (floorData == null)
         {
@@ -242,7 +242,7 @@ public partial class PlayerInstance
 
         prop.PropTimelineData = data;
 
-        
+        // handle mission / quest
         await MissionManager!.HandleFinishType(MissionFinishTypeEnum.TimeLineSetState);
         await MissionManager!.HandleFinishType(MissionFinishTypeEnum.TimeLineSetStateCnt);
     }
@@ -264,14 +264,22 @@ public partial class PlayerInstance
         if (storyLineId != StoryLineManager?.StoryLineData.CurStoryLineId)
         {
             if (StoryLineManager != null)
-                await StoryLineManager.EnterStoryLine(storyLineId, entryId == 0); 
-            mapTp = false; 
+                await StoryLineManager.EnterStoryLine(storyLineId, entryId == 0); // entryId == 0 -> teleport
+            mapTp = false; // do not use mapTp when enter story line
         }
 
         GameData.MapEntranceData.TryGetValue(entryId, out var entrance);
         if (entrance == null) return false;
 
         GameData.GetFloorInfo(entrance.PlaneID, entrance.FloorID, out var floorInfo);
+        // GetFloorInfo hands back null for a floor the resource dump does not contain. Dereferencing it
+        // used to throw, the handler answered a bare failure, and the client sat on the loading screen
+        // with no way to tell what happened — report it instead.
+        if (floorInfo == null)
+        {
+            SceneLogger.Warn($"EnterScene({entryId}) aborted: no floor data for P{entrance.PlaneID}_F{entrance.FloorID}.");
+            return false;
+        }
 
         var startGroup = entrance.StartGroupID;
         var startAnchor = entrance.StartAnchorID;
@@ -291,19 +299,30 @@ public partial class PlayerInstance
             startAnchor = floorInfo.StartAnchorID;
         }
 
-        var anchor = floorInfo.GetAnchorInfo(startGroup, startAnchor);
+        var anchor = floorInfo.GetAnchorInfo(startGroup, startAnchor)
+                     // The entrance may point at a group the dump does not carry; fall back to the floor's
+                     // own start anchor, then to any anchor at all, so a teleport degrades to "wrong spot"
+                     // instead of "stuck on the loading screen".
+                     ?? floorInfo.GetAnchorInfo(floorInfo.StartGroupID, floorInfo.StartAnchorID)
+                     ?? floorInfo.Groups.Values.SelectMany(x => x.AnchorList).FirstOrDefault();
+        if (anchor == null)
+        {
+            SceneLogger.Warn($"EnterScene({entryId}) aborted: no usable anchor on P{entrance.PlaneID}_F{entrance.FloorID} " +
+                        $"(group {startGroup}, anchor {startAnchor}).");
+            return false;
+        }
 
         await MissionManager!.HandleFinishType(MissionFinishTypeEnum.EnterMapByEntrance, entrance);
 
         var beforeEntryId = Data.EntryId;
 
-        await LoadScene(entrance.PlaneID, entrance.FloorID, entryId, anchor!.ToPositionProto(),
+        await LoadScene(entrance.PlaneID, entrance.FloorID, entryId, anchor.ToPositionProto(),
             anchor.ToRotationProto(), sendPacket, mapTp);
 
         var afterEntryId = Data.EntryId;
 
         return beforeEntryId != afterEntryId ||
-               beforeStoryLineId != storyLineId; 
+               beforeStoryLineId != storyLineId; // return true if entryId changed or story line changed
     }
 
     public async ValueTask EnterSceneByEntranceId(int entranceId, int anchorGroupId, int anchorId, bool sendPacket)
@@ -312,6 +331,12 @@ public partial class PlayerInstance
         if (entrance == null) return;
 
         GameData.GetFloorInfo(entrance.PlaneID, entrance.FloorID, out var floorInfo);
+        if (floorInfo == null)
+        {
+            SceneLogger.Warn(
+                $"EnterSceneByEntranceId({entranceId}) aborted: no floor data for P{entrance.PlaneID}_F{entrance.FloorID}.");
+            return;
+        }
 
         var startGroup = anchorGroupId == 0 ? entrance.StartGroupID : anchorGroupId;
         var startAnchor = anchorId == 0 ? entrance.StartAnchorID : anchorId;
@@ -322,9 +347,17 @@ public partial class PlayerInstance
             startAnchor = floorInfo.StartAnchorID;
         }
 
-        var anchor = floorInfo.GetAnchorInfo(startGroup, startAnchor);
+        var anchor = floorInfo.GetAnchorInfo(startGroup, startAnchor)
+                     ?? floorInfo.GetAnchorInfo(floorInfo.StartGroupID, floorInfo.StartAnchorID)
+                     ?? floorInfo.Groups.Values.SelectMany(x => x.AnchorList).FirstOrDefault();
+        if (anchor == null)
+        {
+            SceneLogger.Warn($"EnterSceneByEntranceId({entranceId}) aborted: no usable anchor on " +
+                        $"P{entrance.PlaneID}_F{entrance.FloorID} (group {startGroup}, anchor {startAnchor}).");
+            return;
+        }
 
-        await LoadScene(entrance.PlaneID, entrance.FloorID, entranceId, anchor!.ToPositionProto(),
+        await LoadScene(entrance.PlaneID, entrance.FloorID, entranceId, anchor.ToPositionProto(),
             anchor.ToRotationProto(), sendPacket);
     }
 
@@ -347,69 +380,66 @@ public partial class PlayerInstance
         await SendPacket(new PacketSceneEntityMoveScNotify(this));
     }
 
+    private readonly HashSet<long> _loadingFloors = [];
+
     public async ValueTask LoadScene(int planeId, int floorId, int entryId, Position pos, Position rot, bool sendPacket,
         bool mapTp = false)
     {
         GameData.MazePlaneData.TryGetValue(planeId, out var plane);
         if (plane == null) return;
 
-        if (plane.PlaneType == PlaneTypeEnum.Raid && RaidManager!.RaidData.CurRaidId == 0)
+        var floorKey = ((long)planeId << 32) | (uint)floorId;
+        if (!_loadingFloors.Add(floorKey)) return; // cycle guard: floor already loading (orphan level-graph EnterMap) -> stack overflow
+        try
         {
-            await EnterScene(2000101, 0, sendPacket);
-            return;
+            if (plane.PlaneType == PlaneTypeEnum.Raid && RaidManager!.Data.CurRaidId == 0)
+            {
+                await EnterScene(2000101, 0, sendPacket);
+                return;
+            }
+
+            Data.Pos = pos;
+            Data.Rot = rot;
+            var notSendMove = true;
+            if (planeId != Data.PlaneId || floorId != Data.FloorId || entryId != Data.EntryId || SceneInstance == null ||
+                !mapTp)
+            {
+                if (SceneInstance != null)
+                    await SceneInstance.OnDestroy();
+                SceneInstance instance = new(this, plane, floorId, entryId);
+                SceneInstance = instance;
+                await instance.LoadEntitiesAsync();
+
+                await instance.SyncLineup(true);
+                Data.PlaneId = planeId;
+                Data.FloorId = floorId;
+                Data.EntryId = entryId;
+                March7thHoney.Database.DatabaseHelper.MarkDirty(Uid);
+            }
+            else if (StoryLineManager?.StoryLineData.CurStoryLineId == 0 &&
+                     mapTp) // only send move packet when not in story line and mapTp
+            {
+                notSendMove = false;
+            }
+
+            if (MissionManager != null)
+            {
+                await MissionManager.OnPlayerChangeScene();
+                await MissionManager.HandleFinishType(MissionFinishTypeEnum.EnterFloor);
+                await MissionManager.HandleFinishType(MissionFinishTypeEnum.EnterPlane);
+                await MissionManager.HandleFinishType(MissionFinishTypeEnum.NotInFloor);
+                await MissionManager.HandleFinishType(MissionFinishTypeEnum.NotInPlane);
+                if (SceneInstance != null) await SceneInstance.SyncGroupInfo();
+            }
+
+            if (sendPacket && notSendMove)
+                await SendPacket(new PacketEnterSceneByServerScNotify(SceneInstance!));
+            else if (sendPacket && !notSendMove) // send move packet
+                await SendPacket(new PacketSceneEntityMoveScNotify(this));
         }
-
-        
-        
-        if (plane.PlaneType == PlaneTypeEnum.Challenge && ChallengeManager!.ChallengeInstance == null &&
-            entryId is not GameConstants.CHALLENGE_ENTRANCE and
-                not GameConstants.CHALLENGE_BOSS_ENTRANCE and
-                not GameConstants.CHALLENGE_PEAK_ENTRANCE and
-                not GameConstants.CHALLENGE_STORY_ENTRANCE)
+        finally
         {
-            await EnterScene(100000103, 0, sendPacket);
-            return;
-        }
-
-        
-        Data.Pos = pos;
-        Data.Rot = rot;
-        var notSendMove = true;
-        if (planeId != Data.PlaneId || floorId != Data.FloorId || entryId != Data.EntryId || SceneInstance == null ||
-            !mapTp)
-        {
-            if (SceneInstance != null)
-                await SceneInstance.OnDestroy();
-            SceneInstance instance = new(this, plane, floorId, entryId);
-            InvokeOnPlayerLoadScene(this, instance);
-            SceneInstance = instance;
-
-            await instance.SyncLineup(true);
-            Data.PlaneId = planeId;
-            Data.FloorId = floorId;
-            Data.EntryId = entryId;
-        }
-        else if (StoryLineManager?.StoryLineData.CurStoryLineId == 0 &&
-                 mapTp) 
-        {
-            notSendMove = false;
-        }
-
-        if (MissionManager != null)
-            await MissionManager.OnPlayerChangeScene();
-
-        Connection?.SendPacket(CmdIds.SyncServerSceneChangeNotify);
-        if (sendPacket && notSendMove)
-            await SendPacket(new PacketEnterSceneByServerScNotify(SceneInstance!));
-        else if (sendPacket && !notSendMove) 
-            await SendPacket(new PacketSceneEntityMoveScNotify(this));
-
-        if (MissionManager != null)
-        {
-            await MissionManager.HandleFinishType(MissionFinishTypeEnum.EnterFloor);
-            await MissionManager.HandleFinishType(MissionFinishTypeEnum.EnterPlane);
-            await MissionManager.HandleFinishType(MissionFinishTypeEnum.NotInFloor);
-            await MissionManager.HandleFinishType(MissionFinishTypeEnum.NotInPlane);
+            _loadingFloors.Remove(floorKey);
         }
     }
 
@@ -442,7 +472,7 @@ public partial class PlayerInstance
                 floorData.Add(groupId, groupData);
             }
 
-            var propData = groupData.Find(x => x.PropId == propId); 
+            var propData = groupData.Find(x => x.PropId == propId); // find prop data
             if (propData == null)
             {
                 propData = new ScenePropData
@@ -457,6 +487,19 @@ public partial class PlayerInstance
                 propData.State = state;
             }
         }
+    }
+
+    public void SetGroupCustomSaveData(int entryId, int groupId, string saveData)
+    {
+        if (SceneData == null) return;
+
+        if (!SceneData.CustomSaveData.TryGetValue(entryId, out var groupData))
+        {
+            groupData = [];
+            SceneData.CustomSaveData.Add(entryId, groupData);
+        }
+
+        groupData[groupId] = saveData;
     }
 
     public void EnterSection(int sectionId)
@@ -495,10 +538,8 @@ public partial class PlayerInstance
         if (BattleInstance != null)
         {
             BattleInstance = null;
-            await Connection!.SendPacket(CmdIds.QuitBattleScNotify);
         }
     }
 
     #endregion
 }
-

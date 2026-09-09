@@ -11,6 +11,7 @@ public class HandlerDiceCombatModifyAvatarDiceCsReq : Handler
     {
         var req = DiceCombatModifyAvatarDiceCsReq.Parser.ParseFrom(data);
         var instance = connection.Player!.ActivityManager!.DiceCombat;
+        // KOEOEHIMOEI = avatar id (cross-checked against DiceCombatUpgradeAvatarCsReq)
         await connection.SendPacket(new PacketModifyAvatarDiceRsp(instance, req.AvatarId));
     }
 }

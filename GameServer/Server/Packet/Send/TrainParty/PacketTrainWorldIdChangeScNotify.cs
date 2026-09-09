@@ -9,7 +9,7 @@ public class PacketTrainWorldIdChangeScNotify : BasePacket
     {
         SetData(new TrainWorldIdChangeScNotify
         {
-            LLOLOEHPFHA = worldId
+            CFDCEEMIOCO = worldId
         });
     }
 }

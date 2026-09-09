@@ -11,11 +11,11 @@ public class HandlerTrainCakeCatchDiyCsReq : Handler
     {
         var req = TrainCakeCatchDiyCsReq.Parser.ParseFrom(data);
         var player = connection.Player!;
-        var diy = player.TrainCakeCatchManager!.ApplyDiy(req.PEOECDDANNP ?? new FOFNOBHLKGO());
+        var diy = player.TrainCakeCatchManager!.ApplyDiy(req.NLJBJMDPBGN ?? new BFAKMCIJFCB());
         await connection.SendPacket(new PacketTrainCakeCatchDiyScRsp(diy));
 
-        
-        
+        // The room snapshot already carries both DIY and cat-tree state, so rebroadcast it
+        // whenever the visible room setup changes while the owner is in a social room.
         await player.TrainCakeCatchManager.BroadcastRoomSnapshotAsync();
     }
 }

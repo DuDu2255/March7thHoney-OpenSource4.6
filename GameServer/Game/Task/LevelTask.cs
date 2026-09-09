@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using March7thHoney.Data.Config;
 using March7thHoney.Data.Config.Scene;
 using March7thHoney.Data.Config.Task;
@@ -12,6 +13,7 @@ using March7thHoney.Proto;
 
 namespace March7thHoney.GameServer.Game.Task;
 
+[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
 public class LevelTask(PlayerInstance player)
 {
     public PlayerInstance Player { get; } = player;
@@ -65,13 +67,13 @@ public class LevelTask(PlayerInstance player)
 
     private ExecuteTask? GetOrCreateExecuteTask(string methodName)
     {
-        
+        // try to get from cache
         if (_cachedTasks.TryGetValue(methodName, out var method)) return method;
         var methodProp = GetType().GetMethod(methodName);
         if (methodProp == null) return null;
 
         method = (ExecuteTask)Delegate.CreateDelegate(typeof(ExecuteTask), this, methodProp);
-        _cachedTasks[methodName] = method; 
+        _cachedTasks[methodName] = method; // cached
 
         return method;
     }
@@ -162,7 +164,7 @@ public class LevelTask(PlayerInstance player)
     {
         if (act is PredicateTaskList predicateTaskList)
         {
-            
+            // handle predicateCondition
             var methodName = predicateTaskList.Predicate.Type.Replace("RPG.GameCore.", "");
 
             var method = GetOrCreateExecuteTask(methodName);
@@ -199,7 +201,7 @@ public class LevelTask(PlayerInstance player)
                         await prop.SetState(
                             prop.Excel.PropStateList[prop.Excel.PropStateList.IndexOf(prop.State) + 1]);
 
-                        
+                        // Elevator
                         foreach (var id in prop.PropInfo.UnlockControllerID)
                         foreach (var entity2 in Player.SceneInstance!.Entities.Values)
                             if (entity2 is EntityProp prop2 && prop2.GroupId == id.Key &&
@@ -209,7 +211,7 @@ public class LevelTask(PlayerInstance player)
                 }
                 catch
                 {
-                    
+                    // ignored
                 }
 
         return null;
@@ -222,8 +224,8 @@ public class LevelTask(PlayerInstance player)
             await Player.LineupManager!.AddAvatarToCurTeam(subMission.SubMissionInfo.ParamInt1);
 
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.GetTrialAvatarList)
-            subMission.SubMissionInfo.ParamIntList?.ForEach(
-                async x => await Player.LineupManager!.AddAvatarToCurTeam(x));
+            foreach (var x in subMission.SubMissionInfo.ParamIntList ?? [])
+                await Player.LineupManager!.AddAvatarToCurTeam(x);
 
         return null;
     }
@@ -234,16 +236,18 @@ public class LevelTask(PlayerInstance player)
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.GetTrialAvatar)
         {
             var ids = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.ToList() ?? [];
-            ids.ForEach(async x => await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false));
+            foreach (var x in ids)
+                await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false);
             await Player.LineupManager!.AddAvatarToCurTeam(subMission.SubMissionInfo.ParamInt1);
         }
 
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.GetTrialAvatarList)
         {
             var ids = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.ToList() ?? [];
-            ids.ForEach(async x => await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false));
-            subMission.SubMissionInfo.ParamIntList?.ForEach(
-                async x => await Player.LineupManager!.AddAvatarToCurTeam(x));
+            foreach (var x in ids)
+                await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false);
+            foreach (var x in subMission.SubMissionInfo.ParamIntList ?? [])
+                await Player.LineupManager!.AddAvatarToCurTeam(x);
         }
 
         return null;
@@ -255,7 +259,8 @@ public class LevelTask(PlayerInstance player)
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.StoryLineAddTrialAvatar)
         {
             var ids = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.ToList() ?? [];
-            ids.ForEach(async void (x) => await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false));
+            foreach (var x in ids)
+                await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false);
             await Player.LineupManager!.AddAvatarToCurTeam(subMission.SubMissionInfo.ParamInt1);
         }
 
@@ -270,17 +275,18 @@ public class LevelTask(PlayerInstance player)
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.GetTrialAvatar)
         {
             var ids = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.ToList() ?? [];
-            ids.ForEach(async x => await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false));
-            ;
+            foreach (var x in ids)
+                await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false);
             await Player.LineupManager!.AddAvatarToCurTeam(subMission.SubMissionInfo.ParamInt1);
         }
 
         if (subMission.SubMissionInfo?.FinishType == MissionFinishTypeEnum.GetTrialAvatarList)
         {
             var ids = Player.LineupManager!.GetCurLineup()?.BaseAvatars?.ToList() ?? [];
-            ids.ForEach(async x => await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false));
-            subMission.SubMissionInfo.ParamIntList?.ForEach(
-                async x => await Player.LineupManager!.AddAvatarToCurTeam(x));
+            foreach (var x in ids)
+                await Player.LineupManager!.RemoveAvatarFromCurTeam(x.BaseAvatarId, false);
+            foreach (var x in subMission.SubMissionInfo.ParamIntList ?? [])
+                await Player.LineupManager!.AddAvatarToCurTeam(x);
         }
 
         return null;
@@ -301,7 +307,7 @@ public class LevelTask(PlayerInstance player)
                 if (Player.Data.CurrentGender == Gender.Man)
                 {
                     foreach (var avatar in subMission.SubMissionInfo?.ParamIntList ?? [])
-                        if (avatar > 10000) 
+                        if (avatar > 10000) // else is Base Avatar
                             if (avatar.ToString().EndsWith("8002") ||
                                 avatar.ToString().EndsWith("8004") ||
                                 avatar.ToString().EndsWith("8006"))
@@ -310,7 +316,7 @@ public class LevelTask(PlayerInstance player)
                 else
                 {
                     foreach (var avatar in subMission.SubMissionInfo?.ParamIntList ?? [])
-                        if (avatar > 10000) 
+                        if (avatar > 10000) // else is Base Avatar
                             if (avatar.ToString().EndsWith("8001") ||
                                 avatar.ToString().EndsWith("8003") ||
                                 avatar.ToString().EndsWith("8005"))
@@ -318,7 +324,8 @@ public class LevelTask(PlayerInstance player)
                 }
             }
 
-            list.ForEach(async x => await Player.LineupManager!.AddAvatarToCurTeam(x));
+            foreach (var x in list)
+                await Player.LineupManager!.AddAvatarToCurTeam(x);
         }
 
         return null;
@@ -389,7 +396,7 @@ public class LevelTask(PlayerInstance player)
     {
         if (act is PropStateExecute propStateExecute)
         {
-            
+            // handle targetType
             var methodName = propStateExecute.TargetType.Type.Replace("RPG.GameCore.", "");
 
             var method = GetType().GetMethod(methodName);

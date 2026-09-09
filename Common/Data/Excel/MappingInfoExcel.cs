@@ -1,20 +1,21 @@
+using MemoryPack;
 using March7thHoney.Database.Inventory;
 using March7thHoney.Enums.Item;
 using March7thHoney.Util;
-using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("MappingInfo.json")]
-public class MappingInfoExcel : ExcelResource
+[MemoryPackable]
+public partial class MappingInfoExcel : ExcelResource
 {
     public int ID { get; set; }
     public int WorldLevel { get; set; }
 
     [JsonConverter(typeof(StringEnumConverter))]
-    public FarmTypeEnum FarmType { get; set; } = FarmTypeEnum.None; 
+    public FarmTypeEnum FarmType { get; set; } = FarmTypeEnum.None; // is enum
 
     public List<MappingInfoItem> DisplayItemList { get; set; } = [];
 
@@ -45,7 +46,7 @@ public class MappingInfoExcel : ExcelResource
 
             if (item.ItemID == 2)
             {
-                DropItemList.Add(new MappingInfoItem() 
+                DropItemList.Add(new MappingInfoItem() // random credit
                 {
                     ItemID = 2,
                     MinCount = (50 + WorldLevel * 10) * (int)FarmType,
@@ -63,7 +64,7 @@ public class MappingInfoExcel : ExcelResource
                 var baseRelicId = item.ItemID / 10 % 1000;
                 var baseRarity = item.ItemID % 10;
 
-                
+                // Add relics from the set
                 var relicStart = 20001 + baseRarity * 10000 + baseRelicId * 10;
                 var relicEnd = relicStart + 3;
                 for (; relicStart <= relicEnd; relicStart++)
@@ -83,13 +84,13 @@ public class MappingInfoExcel : ExcelResource
             }
             else if (excel.ItemMainType == ItemMainTypeEnum.Material)
             {
-                
+                // Calculate amount to drop by purpose level
                 MappingInfoItem? drop;
                 switch (excel.PurposeType)
                 {
-                    
+                    // Avatar exp. Drop rate is guessed (with data)
                     case 1:
-                        
+                        // Calc amount
                         var amount = excel.Rarity switch
                         {
                             ItemRarityEnum.NotNormal => WorldLevel < 3 ? WorldLevel + 3 : 2.5,
@@ -99,21 +100,21 @@ public class MappingInfoExcel : ExcelResource
 
                         drop = new MappingInfoItem(excel.ID, (int)amount);
                         break;
-                    
+                    // Boss materials
                     case 2:
                         drop = new MappingInfoItem(excel.ID, WorldLevel);
                         break;
-                    
+                    // Trace materials. Drop rate is guessed (with data)
                     case 3:
                         drop = new MappingInfoItem(excel.ID, 5);
                         break;
-                    
+                    // Boss Trace materials. Drop rate is guessed (with data)
                     case 4:
                         drop = new MappingInfoItem(excel.ID, (int)(WorldLevel * 0.5 + 0.5));
                         break;
-                    
+                    // Lightcone exp. Drop rate is guessed (with data)
                     case 5:
-                        
+                        // Calc amount
                         var count = excel.Rarity switch
                         {
                             ItemRarityEnum.NotNormal => Math.Max(5 - WorldLevel, 2.5),
@@ -123,11 +124,11 @@ public class MappingInfoExcel : ExcelResource
 
                         drop = new MappingInfoItem(excel.ID, (int)count);
                         break;
-                    
+                    // Lucent afterglow
                     case 11:
                         drop = new MappingInfoItem(excel.ID, 4 + WorldLevel);
                         break;
-                    
+                    // Unknown
                     default:
                         drop = null;
                         break;
@@ -135,17 +136,17 @@ public class MappingInfoExcel : ExcelResource
 
                 ;
 
-                
+                // Add to drop list
                 if (drop != null) DropItemList.Add(drop);
             }
             else if (excel.ItemMainType == ItemMainTypeEnum.Equipment)
             {
-                
+                // Add lightcones
                 equipDrop.Add(excel.ID);
             }
 
 
-            
+            // Add equipment drops
             if (equipDrop.Count > 0)
                 foreach (var dropId in equipDrop)
                 {
@@ -156,15 +157,15 @@ public class MappingInfoExcel : ExcelResource
                     DropItemList.Add(drop);
                 }
 
-            
+            // Add relic drops
             if (relicDrop.Count > 0)
                 foreach (var entry in relicDrop)
-                    
+                    // Add items to drop param
                 foreach (var value in entry.Value)
                 {
                     MappingInfoItem drop = new(value, 1);
 
-                    
+                    // Set count by rarity
                     var amount = entry.Key switch
                     {
                         4 =>
@@ -177,7 +178,7 @@ public class MappingInfoExcel : ExcelResource
                             WorldLevel == 1 ? 6 : 2
                     };
 
-                    
+                    // Set amount
                     if (amount > 0)
                     {
                         drop.ItemNum = (int)amount;
@@ -214,14 +215,14 @@ public class MappingInfoExcel : ExcelResource
         }
 
         List<ItemData> drops = [];
-        
+        // Add higher rarity relics first
         for (var rarity = 5; rarity >= 2; rarity--)
         {
             var count = GetRelicCountByWorldLevel(rarity) *
                         ConfigManager.Config.ServerOption.ValidFarmingDropRate();
             if (count <= 0) continue;
             if (!relicsMap.TryGetValue(rarity, out var value)) continue;
-            if (value.IsNullOrEmpty()) continue;
+            if (value is null || value.Count == 0) continue;
             while (count > 0)
             {
                 var relic = value.RandomElement();
@@ -307,8 +308,10 @@ public class MappingInfoExcel : ExcelResource
     }
 }
 
-public class MappingInfoItem
+[MemoryPackable]
+public partial class MappingInfoItem
 {
+    [MemoryPackConstructor]
     public MappingInfoItem()
     {
     }

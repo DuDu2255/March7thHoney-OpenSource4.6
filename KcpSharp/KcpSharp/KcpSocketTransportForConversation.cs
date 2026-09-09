@@ -3,9 +3,9 @@ using System.Net.Sockets;
 
 namespace March7thHoney.Kcp.KcpSharp;
 
-
-
-
+/// <summary>
+///     Socket transport for KCP conversation.
+/// </summary>
 internal sealed class KcpSocketTransportForConversation : KcpSocketTransport<KcpConversation>,
     IKcpTransport<KcpConversation>
 {

@@ -2,9 +2,8 @@ using March7thHoney.Data;
 using March7thHoney.Data.Excel;
 using March7thHoney.Database.Avatar;
 using March7thHoney.Database.Inventory;
-using March7thHoney.GameServer.Game.Player;
 using March7thHoney.GameServer.Game.GridFight;
-using March7thHoney.GameServer.Game.GridFight.Battle;
+using March7thHoney.GameServer.Game.Player;
 using March7thHoney.GameServer.Game.Scene;
 using March7thHoney.GameServer.Game.Scene.Entity;
 using March7thHoney.GameServer.Server.Packet.Send.Battle;
@@ -12,7 +11,6 @@ using March7thHoney.GameServer.Server.Packet.Send.Lineup;
 using March7thHoney.GameServer.Server.Packet.Send.Scene;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using static March7thHoney.GameServer.Plugin.Event.PluginEvent;
 
 namespace March7thHoney.GameServer.Game.Battle;
 
@@ -76,7 +74,7 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
             }
             else
             {
-                Player.InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
+                await Player.InventoryManager!.HandlePlaneEvent(prop.PropInfo.EventID);
             }
 
         }
@@ -106,14 +104,14 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
             avatarList.AddRange(Player.LineupManager!.GetCurLineup()!.BaseAvatars!
                 .Select(item =>
                     Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x =>
-                        x.AvatarInfo.AvatarId == item.BaseAvatarId))
+                        x.AvatarInfo.BaseAvatarId == item.BaseAvatarId))
                 .OfType<AvatarSceneInfo>());
 
             MazeBuff? mazeBuff = null;
             if (castAvatar != null)
             {
                 var index = battleInstance.Lineup.BaseAvatars!.FindIndex(x =>
-                    x.BaseAvatarId == castAvatar.AvatarInfo.AvatarId);
+                    x.BaseAvatarId == castAvatar.AvatarInfo.BaseAvatarId);
                 GameData.AvatarConfigData.TryGetValue(castAvatar.AvatarInfo.AvatarId, out var avatarExcel);
                 if (avatarExcel != null)
                 {
@@ -129,18 +127,17 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
                 };
             }
 
-            if (mazeBuff != null && mazeBuff.BuffID != 0) 
+            if (mazeBuff != null && mazeBuff.BuffID != 0) // avoid adding a buff with ID 0
                 battleInstance.Buffs.Add(mazeBuff);
 
             battleInstance.AvatarInfo = avatarList;
 
-            
+            // call battle start
             Player.ChallengeManager!.ChallengeInstance?.OnBattleStart(battleInstance);
             Player.QuestManager!.OnBattleStart(battleInstance);
 
             Player.BattleInstance = battleInstance;
 
-            InvokeOnPlayerEnterBattle(Player, battleInstance);
 
             return battleInstance;
         }
@@ -180,18 +177,17 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         };
 
         var avatarList = Player.LineupManager!.GetCurLineup()!.BaseAvatars!.Select(item =>
-                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.AvatarId == item.BaseAvatarId))
+                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.BaseAvatarId == item.BaseAvatarId))
             .OfType<AvatarSceneInfo>().ToList();
 
         battleInstance.AvatarInfo = avatarList;
 
-        
+        // call battle start
         Player.ChallengeManager!.ChallengeInstance?.OnBattleStart(battleInstance);
         Player.QuestManager!.OnBattleStart(battleInstance);
 
         Player.BattleInstance = battleInstance;
 
-        InvokeOnPlayerEnterBattle(Player, battleInstance);
 
         await Player.SendPacket(new PacketSceneEnterStageScRsp(battleInstance));
         Player.SceneInstance?.OnEnterStage();
@@ -242,7 +238,7 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         }
 
         var avatarList = Player.LineupManager!.GetCurLineup()!.BaseAvatars!.Select(item =>
-                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.AvatarId == item.BaseAvatarId))
+                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.BaseAvatarId == item.BaseAvatarId))
             .OfType<AvatarSceneInfo>().ToList();
 
         battleInstance.AvatarInfo = avatarList;
@@ -250,7 +246,6 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         Player.BattleInstance = battleInstance;
         Player.QuestManager!.OnBattleStart(battleInstance);
 
-        InvokeOnPlayerEnterBattle(Player, battleInstance);
         await ValueTask.CompletedTask;
         return battleInstance;
     }
@@ -272,7 +267,7 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         };
 
         var avatarList = Player.LineupManager!.GetCurLineup()!.BaseAvatars!.Select(item =>
-                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.AvatarId == item.BaseAvatarId))
+                Player.SceneInstance!.AvatarInfo.Values.FirstOrDefault(x => x.AvatarInfo.BaseAvatarId == item.BaseAvatarId))
             .OfType<AvatarSceneInfo>().ToList();
 
         battleInstance.AvatarInfo = avatarList;
@@ -280,7 +275,6 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         Player.BattleInstance = battleInstance;
         Player.QuestManager!.OnBattleStart(battleInstance);
 
-        InvokeOnPlayerEnterBattle(Player, battleInstance);
         await ValueTask.CompletedTask;
         return battleInstance;
     }
@@ -304,7 +298,7 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
             AvatarInfo = []
         };
 
-        
+        // call battle start
         Player.ChallengeManager!.ChallengeInstance?.OnBattleStart(battleInstance);
         Player.QuestManager!.OnBattleStart(battleInstance);
 
@@ -313,16 +307,8 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         return (Retcode.RetSucc, battleInstance);
     }
 
-    public BattleInstance? StartGridFightBattle(object inst)
-    {
-        if (inst is not GridFightInstance gridFightInstance)
-            return null;
-        return GridFightBattleModule.StartBattle(Player, gridFightInstance);
-    }
-
     public async ValueTask EndBattle(PVEBattleResultCsReq req)
     {
-        InvokeOnPlayerQuitBattle(Player, req);
 
         if (Player.BattleInstance == null)
         {
@@ -334,26 +320,31 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
         var battle = Player.BattleInstance;
         var updateStatus = true;
         var teleportToAnchor = false;
+        var isActiveFarmBattle = false;
         var minimumHp = 0;
         var dropItems = new List<ItemData>();
-        switch (req.EndStatus)
+        if (battle.GridFightContext != null)
+            updateStatus = false;
+        else switch (req.EndStatus)
         {
             case BattleEndStatus.BattleEndWin:
                 if (battle.EntityMonsters.Count == 0)
                     battle.EntityMonsters = ResolveSceneMonstersByStageId(battle.StageId);
 
-                
+                // Drops
                 var farmEntityId = (int)Player.ActiveFarmElementEntityId;
+                isActiveFarmBattle = farmEntityId != 0 &&
+                                     battle.EntityMonsters.Any(monster => monster.EntityId == farmEntityId);
                 foreach (var monster in battle.EntityMonsters)
                 {
                     var keepInScene = farmEntityId != 0 && monster.EntityId == farmEntityId;
                     dropItems.AddRange(await monster.Kill(false, removeFromScene: !keepInScene));
                 }
-                
+                // Spend stamina
                 if (battle.StaminaCost > 0) await Player.SpendStamina(battle.StaminaCost);
                 break;
             case BattleEndStatus.BattleEndLose:
-                
+                // Set avatar hp to 20% if the player's party is downed
                 minimumHp = 2000;
                 teleportToAnchor = true;
                 break;
@@ -364,10 +355,13 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
                 break;
         }
 
+        if (battle.CalyxOverride?.HasLineupOverride == true)
+            updateStatus = false;
+
         if (updateStatus)
         {
             var lineup = Player.LineupManager!.GetCurLineup()!;
-            
+            // Update battle status
             foreach (var avatar in req.Stt.BattleAvatarList)
             {
                 BaseAvatarInfo? avatarInstance = Player.AvatarManager!.GetFormalAvatar((int)avatar.Id);
@@ -402,30 +396,32 @@ public class BattleManager(PlayerInstance player) : BasePlayerManager(player)
                 if (anchor != null) await Player.MoveTo(anchor.ToPositionProto());
             }
         }
-        else if (Player.ActiveFarmElementEntityId != 0 && Player.FarmElementReturnPos != null)
+        else if (isActiveFarmBattle && Player.FarmElementReturnPos != null)
         {
             await Player.MoveTo(Player.FarmElementReturnPos, Player.FarmElementReturnRot ?? Player.Data.Rot!);
         }
 
-        
+        // call battle end
         battle.MonsterDropItems = dropItems;
         battle.BattleResult = req;
 
         Player.BattleInstance = null;
 
-        if (Player.GridFightManager?.GridFightInstance != null)
-        {
-            
-            await Player.GridFightManager.GridFightInstance.EndBattle(battle, req);
-        }
+        if (battle.GridFightContext != null && Player.GridFightManager != null)
+            await Player.GridFightManager.EndBattle(battle, req);
 
         battle.OnBattleEnd += Player.MissionManager!.OnBattleFinish;
         await battle.TriggerOnBattleEnd();
 
-        if (Player.ActivityManager!.TrialActivityInstance != null && req.EndStatus == BattleEndStatus.BattleEndWin)
-            await Player.ActivityManager.TrialActivityInstance.EndActivity(TrialActivityStatus.Finish);
+        var trialActivity = Player.ActivityManager!.TrialActivityInstance;
+        var trialStageId = trialActivity?.Data.CurTrialStageId ?? 0;
+        if (req.EndStatus == BattleEndStatus.BattleEndWin &&
+            trialActivity != null && trialStageId != 0 &&
+            battle.StageId == trialStageId)
+            await trialActivity.EndActivity(TrialActivityStatus.Finish);
 
-        await Player.SendPacket(new PacketPVEBattleResultScRsp(req, Player, battle));
+        var dropItemList = await battle.GetDropItemListAsync();
+        await Player.SendPacket(new PacketPVEBattleResultScRsp(req, Player, battle, dropItemList));
     }
 
     private List<EntityMonster> ResolveSceneMonstersByStageId(int stageId)

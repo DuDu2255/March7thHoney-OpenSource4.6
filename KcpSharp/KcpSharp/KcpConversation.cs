@@ -15,9 +15,9 @@ using March7thHoney.Util;
 
 namespace March7thHoney.Kcp.KcpSharp;
 
-
-
-
+/// <summary>
+///     A reliable channel over an unreliable transport implemented in KCP protocol.
+/// </summary>
 public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionProducer<KcpConversation>
 {
     private readonly IKcpBufferPool _bufferPool;
@@ -90,27 +90,27 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
 
     private const uint IKCP_RTO_MAX = 60000;
     private const int IKCP_THRESH_MIN = 2;
-    private const uint IKCP_PROBE_INIT = 7000; 
-    private const uint IKCP_PROBE_LIMIT = 120000; 
+    private const uint IKCP_PROBE_INIT = 7000; // 7 secs to probe window size
+    private const uint IKCP_PROBE_LIMIT = 120000; // up to 120 secs to probe window
 
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Construct a reliable channel using KCP protocol.
+    /// </summary>
+    /// <param name="remoteEndpoint">The remote endpoint</param>
+    /// <param name="transport">The underlying transport.</param>
+    /// <param name="options">The options of the <see cref="KcpConversation" />.</param>
     public KcpConversation(IPEndPoint remoteEndpoint, IKcpTransport transport, KcpConversationOptions? options)
         : this(remoteEndpoint, transport, null, options)
     {
     }
 
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Construct a reliable channel using KCP protocol.
+    /// </summary>
+    /// <param name="remoteEndpoint">The remote endpoint</param>
+    /// <param name="transport">The underlying transport.</param>
+    /// <param name="conversationId">The conversation ID.</param>
+    /// <param name="options">The options of the <see cref="KcpConversation" />.</param>
     public KcpConversation(IPEndPoint remoteEndpoint, IKcpTransport transport, long conversationId,
         KcpConversationOptions? options)
         : this(remoteEndpoint, transport, (ulong)conversationId, options)
@@ -222,13 +222,13 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         RunUpdateOnActivation();
     }
 
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Set the handler to invoke when exception is thrown during flushing packets to the transport. Return true in the
+    ///     handler to ignore the error and continue running. Return false in the handler to abort the operation and mark the
+    ///     transport as closed.
+    /// </summary>
+    /// <param name="handler">The exception handler.</param>
+    /// <param name="state">The state object to pass into the exception handler.</param>
     public void SetExceptionHandler(Func<Exception, KcpConversation, object?, bool> handler, object? state)
     {
         if (handler is null) throw new ArgumentNullException(nameof(handler));
@@ -237,122 +237,122 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         _exceptionHandlerState = state;
     }
 
-    
-    
-    
+    /// <summary>
+    ///     Get the ID of the current conversation.
+    /// </summary>
     public long? ConversationId => (long?)_id;
 
-    
-    
-    
+    /// <summary>
+    ///     Get whether the transport is marked as closed.
+    /// </summary>
     public bool TransportClosed { get; private set; }
 
-    
-    
-    
+    /// <summary>
+    ///     Get whether the conversation is in stream mode.
+    /// </summary>
     public bool StreamMode { get; }
 
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Get the available byte count and available segment count in the send queue.
+    /// </summary>
+    /// <param name="byteCount">The available byte count in the send queue.</param>
+    /// <param name="segmentCount">The available segment count in the send queue.</param>
+    /// <returns>True if the transport is not closed. Otherwise false.</returns>
     public bool TryGetSendQueueAvailableSpace(out int byteCount, out int segmentCount)
     {
         return _sendQueue.TryGetAvailableSpace(out byteCount, out segmentCount);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Try to put message into the send queue.
+    /// </summary>
+    /// <param name="buffer">The content of the message.</param>
+    /// <returns>
+    ///     True if the message is put into the send queue. False if the message is too large to fit in the send queue, or
+    ///     the transport is closed.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    ///     The size of the message is larger than 256 * mtu, thus it can not be correctly
+    ///     fragmented and sent. This exception is never thrown in stream mode.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The send or flush operation is initiated concurrently.</exception>
     public bool TrySend(ReadOnlySpan<byte> buffer)
     {
         return _sendQueue.TrySend(buffer, false, out _);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Try to put message into the send queue.
+    /// </summary>
+    /// <param name="buffer">The content of the message.</param>
+    /// <param name="allowPartialSend">
+    ///     Whether partial sending is allowed in stream mode. This must not be true in non-stream
+    ///     mode.
+    /// </param>
+    /// <param name="bytesWritten">
+    ///     The number of bytes put into the send queue. This is always the same as the size of the
+    ///     <paramref name="buffer" /> unless <paramref name="allowPartialSend" /> is set to true.
+    /// </param>
+    /// <returns>
+    ///     True if the message is put into the send queue. False if the message is too large to fit in the send queue, or
+    ///     the transport is closed.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="allowPartialSend" /> is set to true in non-stream mode. Or the size
+    ///     of the message is larger than 256 * mtu, thus it can not be correctly fragmented and sent. This exception is never
+    ///     thrown in stream mode.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The send or flush operation is initiated concurrently.</exception>
     public bool TrySend(ReadOnlySpan<byte> buffer, bool allowPartialSend, out int bytesWritten)
     {
         return _sendQueue.TrySend(buffer, allowPartialSend, out bytesWritten);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait until the send queue contains at least <paramref name="minimumBytes" /> bytes of free space, and also
+    ///     <paramref name="minimumSegments" /> available segments.
+    /// </summary>
+    /// <param name="minimumBytes">The number of bytes in the available space.</param>
+    /// <param name="minimumSegments">The count of segments in the available space.</param>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     <paramref name="minimumBytes" /> or <paramref name="minimumSegments" />
+    ///     is larger than the total space of the send queue.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before send operation
+    ///     is completed. Or <see cref="CancelPendingSend(Exception?, CancellationToken)" /> is called before this operation is
+    ///     completed.
+    /// </exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{Boolean}" /> that completes when there is enough space in the send queue. The result of
+    ///     the task is false when the transport is closed.
+    /// </returns>
     public ValueTask<bool> WaitForSendQueueAvailableSpaceAsync(int minimumBytes, int minimumSegments,
         CancellationToken cancellationToken = default)
     {
         return _sendQueue.WaitForAvailableSpaceAsync(minimumBytes, minimumSegments, cancellationToken);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Put message into the send queue.
+    /// </summary>
+    /// <param name="buffer">The content of the message.</param>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="ArgumentException">
+    ///     The size of the message is larger than 256 * mtu, thus it can not be correctly
+    ///     fragmented and sent. This exception is never thrown in stream mode.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before send operation
+    ///     is completed. Or <see cref="CancelPendingSend(Exception?, CancellationToken)" /> is called before this operation is
+    ///     completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The send or flush operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{Boolean}" /> that completes when the entire message is put into the queue. The result
+    ///     of the task is false when the transport is closed.
+    /// </returns>
     public ValueTask<bool> SendAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         return _sendQueue.SendAsync(buffer, cancellationToken);
@@ -363,54 +363,54 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         return _sendQueue.WriteAsync(buffer, cancellationToken);
     }
 
-    
-    
-    
-    
+    /// <summary>
+    ///     Cancel the current send operation or flush operation.
+    /// </summary>
+    /// <returns>True if the current operation is canceled. False if there is no active send operation.</returns>
     public bool CancelPendingSend()
     {
         return _sendQueue.CancelPendingOperation(null, default);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Cancel the current send operation or flush operation.
+    /// </summary>
+    /// <param name="innerException">
+    ///     The inner exception of the <see cref="OperationCanceledException" /> thrown by the
+    ///     <see cref="SendAsync(ReadOnlyMemory{byte}, CancellationToken)" /> method or
+    ///     <see cref="FlushAsync(CancellationToken)" /> method.
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     The <see cref="CancellationToken" /> in the <see cref="OperationCanceledException" />
+    ///     thrown by the <see cref="SendAsync(ReadOnlyMemory{byte}, CancellationToken)" /> method or
+    ///     <see cref="FlushAsync(CancellationToken)" /> method.
+    /// </param>
+    /// <returns>True if the current operation is canceled. False if there is no active send operation.</returns>
     public bool CancelPendingSend(Exception? innerException, CancellationToken cancellationToken)
     {
         return _sendQueue.CancelPendingOperation(innerException, cancellationToken);
     }
 
-    
-    
-    
+    /// <summary>
+    ///     Gets the count of bytes not yet sent to the remote host or not acknowledged by the remote host.
+    /// </summary>
     public long UnflushedBytes => _sendQueue.GetUnflushedBytes();
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait until all messages are sent and acknowledged by the remote host, as well as all the acknowledgements are sent.
+    /// </summary>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before send operation
+    ///     is completed. Or <see cref="CancelPendingSend(Exception?, CancellationToken)" /> is called before this operation is
+    ///     completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The send or flush operation is initiated concurrently.</exception>
+    /// <exception cref="ObjectDisposedException">The <see cref="KcpConversation" /> instance is disposed.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{Boolean}" /> that completes when the all messages are sent and acknowledged. The result
+    ///     of the task is false when the transport is closed.
+    /// </returns>
     public ValueTask<bool> FlushAsync(CancellationToken cancellationToken = default)
     {
         return _sendQueue.FlushAsync(cancellationToken);
@@ -454,7 +454,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         var size = preBufferSize;
         buffer.Span.Slice(0, size).Clear();
 
-        
+        // flush acknowledges
         {
             var index = 0;
             while (_ackList.TryGetAt(index++, out var serialNumber, out var timestamp))
@@ -479,11 +479,11 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
 
         var current = GetTimestamp();
 
-        
+        // calculate window size
         var cwnd = Math.Min(_snd_wnd, _rmt_wnd);
         if (!_nocwnd) cwnd = Math.Min(_cwnd, cwnd);
 
-        
+        // move data from snd_queue to snd_buf
         while (TimeDiff(_snd_nxt, _snd_una + cwnd) < 0)
         {
             if (!_sendQueue.TryDequeue(out var data, out var fragment)) break;
@@ -501,11 +501,11 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             }
         }
 
-        
+        // calculate resent
         var resent = _fastresend > 0 ? (uint)_fastresend : 0xffffffff;
         var rtomin = !_nodelay ? _rx_rto >> 3 : 0;
 
-        
+        // flush data segments
         var lost = false;
         var change = false;
         var segmentNode = _sndBuf.First;
@@ -532,7 +532,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
                 }
                 else
                 {
-                    var step = rto; 
+                    var step = rto; //_nodelay < 2 ? segment.rto : _rx_rto;
                     rto += step / 2;
                 }
 
@@ -591,7 +591,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
 
         _ackList.Clear();
 
-        
+        // probe window size (if remote window size equals zero)
         if (_rmt_wnd == 0)
         {
             if (_probe_wait == 0)
@@ -617,7 +617,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             _probe_wait = 0;
         }
 
-        
+        // flush window probing command
         if ((_probe & KcpProbeType.AskSend) != 0)
         {
             if (size + packetHeaderSize > sizeLimitBeforePostBuffer)
@@ -637,7 +637,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             size += bytesWritten;
         }
 
-        
+        // flush window probing response
         if (!anyPacketSent && ShouldSendWindowSize(current))
         {
             if (size + packetHeaderSize > sizeLimitBeforePostBuffer)
@@ -658,7 +658,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
 
         _probe = KcpProbeType.None;
 
-        
+        // flush remaining segments
         if (size > preBufferSize)
         {
             buffer.Span.Slice(size, postBufferSize).Clear();
@@ -676,7 +676,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             _lastSendTick = GetTimestamp();
         }
 
-        
+        // update window
         var lockTaken = false;
         try
         {
@@ -685,7 +685,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             var updatedCwnd = _cwnd;
             var incr = _incr;
 
-            
+            // update sshthresh
             if (change)
             {
                 var inflight = _snd_nxt - _snd_una;
@@ -715,7 +715,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             if (lockTaken) _cwndUpdateLock.Exit();
         }
 
-        
+        // send keep-alive
         if (_keepAliveEnabled)
             if (TimeDiff(GetTimestamp(), _lastSendTick) > _keepAliveInterval)
             {
@@ -861,7 +861,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         return result;
     }
 
-    
+    /// <inheritdoc />
     public ValueTask InputPakcetAsync(UdpReceiveResult packet, CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested) return new ValueTask(Task.FromCanceled(cancellationToken));
@@ -879,7 +879,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         }
 
         var length = BinaryPrimitives.ReadUInt32LittleEndian(packetSpan.Slice(16));
-        if (length > (uint)(packetSpan.Length - 20)) 
+        if (length > (uint)(packetSpan.Length - 20)) // implicitly checked for (int)length < 0
             return default;
 
         var activation = _updateActivation;
@@ -976,7 +976,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
             }
             else if (header.Command == KcpCommand.WindowSize)
             {
-                
+                // do nothing
             }
             else
             {
@@ -1171,7 +1171,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
                 mutated = true;
             }
 
-            
+            // move available data from rcv_buf -> rcv_queue
             node = _rcvBuf.First;
             while (node is not null)
             {
@@ -1245,127 +1245,127 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         return (int)(later - earlier);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Get the size of the next available message in the receive queue.
+    /// </summary>
+    /// <param name="result">The transport state and the size of the next available message.</param>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     True if the receive queue contains at least one message. False if the receive queue is empty or the transport
+    ///     is closed.
+    /// </returns>
     public bool TryPeek(out KcpConversationReceiveResult result)
     {
         return _receiveQueue.TryPeek(out result);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Remove the next available message in the receive queue and copy its content into <paramref name="buffer" />. When
+    ///     in stream mode, move as many bytes as possible into <paramref name="buffer" />.
+    /// </summary>
+    /// <param name="buffer">The buffer to receive message.</param>
+    /// <param name="result">The transport state and the count of bytes moved into <paramref name="buffer" />.</param>
+    /// <exception cref="ArgumentException">
+    ///     The size of the next available message is larger than the size of
+    ///     <paramref name="buffer" />. This exception is never thrown in stream mode.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     True if the next available message is moved into <paramref name="buffer" />. False if the receive queue is
+    ///     empty or the transport is closed.
+    /// </returns>
     public bool TryReceive(Span<byte> buffer, out KcpConversationReceiveResult result)
     {
         return _receiveQueue.TryReceive(buffer, out result);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait until the receive queue contains at least one full message, or at least one byte in stream mode.
+    /// </summary>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before receive
+    ///     operation is completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{KcpConversationReceiveResult}" /> that completes when the receive queue contains at
+    ///     least one full message, or at least one byte in stream mode. Its result contains the transport state and the size
+    ///     of the available message.
+    /// </returns>
     public ValueTask<KcpConversationReceiveResult> WaitToReceiveAsync(CancellationToken cancellationToken = default)
     {
         return _receiveQueue.WaitToReceiveAsync(cancellationToken);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait until the receive queue contains at leat <paramref name="minimumBytes" /> bytes.
+    /// </summary>
+    /// <param name="minimumBytes">The minimum bytes in the receive queue.</param>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="minimumBytes" /> is a negative integer.</exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before receive
+    ///     operation is completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{Boolean}" /> that completes when the receive queue contains at least
+    ///     <paramref name="minimumBytes" /> bytes. The result of the task is false when the transport is closed.
+    /// </returns>
     public ValueTask<bool> WaitForReceiveQueueAvailableDataAsync(int minimumBytes,
         CancellationToken cancellationToken = default)
     {
         return _receiveQueue.WaitForAvailableDataAsync(minimumBytes, 0, cancellationToken);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait until the receive queue contains at leat <paramref name="minimumBytes" /> bytes, and also
+    ///     <paramref name="minimumSegments" /> segments.
+    /// </summary>
+    /// <param name="minimumBytes">The minimum bytes in the receive queue.</param>
+    /// <param name="minimumSegments">The minimum segments in the receive queue</param>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     Any od <paramref name="minimumBytes" /> and
+    ///     <paramref name="minimumSegments" /> is a negative integer.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before receive
+    ///     operation is completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{Boolean}" /> that completes when the receive queue contains at least
+    ///     <paramref name="minimumBytes" /> bytes. The result of the task is false when the transport is closed.
+    /// </returns>
     public ValueTask<bool> WaitForReceiveQueueAvailableDataAsync(int minimumBytes, int minimumSegments,
         CancellationToken cancellationToken = default)
     {
         return _receiveQueue.WaitForAvailableDataAsync(minimumBytes, minimumSegments, cancellationToken);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Wait for the next full message to arrive if the receive queue is empty. Remove the next available message in the
+    ///     receive queue and copy its content into <paramref name="buffer" />. When in stream mode, move as many bytes as
+    ///     possible into <paramref name="buffer" />.
+    /// </summary>
+    /// <param name="buffer">The buffer to receive message.</param>
+    /// <param name="cancellationToken">The token to cancel this operation.</param>
+    /// <exception cref="ArgumentException">
+    ///     The size of the next available message is larger than the size of
+    ///     <paramref name="buffer" />. This exception is never thrown in stream mode.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> is fired before send operation
+    ///     is completed.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The receive or peek operation is initiated concurrently.</exception>
+    /// <returns>
+    ///     A <see cref="ValueTask{KcpConversationReceiveResult}" /> that completes when a full message is moved into
+    ///     <paramref name="buffer" /> or the transport is closed. Its result contains the transport state and the count of
+    ///     bytes written into <paramref name="buffer" />.
+    /// </returns>
     public ValueTask<KcpConversationReceiveResult> ReceiveAsync(Memory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
@@ -1377,35 +1377,35 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         return _receiveQueue.ReadAsync(buffer, cancellationToken);
     }
 
-    
-    
-    
-    
+    /// <summary>
+    ///     Cancel the current receive operation.
+    /// </summary>
+    /// <returns>True if the current operation is canceled. False if there is no active send operation.</returns>
     public bool CancelPendingReceive()
     {
         return _receiveQueue.CancelPendingOperation(null, default);
     }
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Cancel the current receive operation.
+    /// </summary>
+    /// <param name="innerException">
+    ///     The inner exception of the <see cref="OperationCanceledException" /> thrown by the
+    ///     <see cref="ReceiveAsync(Memory{byte}, CancellationToken)" /> method or
+    ///     <see cref="WaitToReceiveAsync(CancellationToken)" /> method.
+    /// </param>
+    /// <param name="cancellationToken">
+    ///     The <see cref="CancellationToken" /> in the <see cref="OperationCanceledException" />
+    ///     thrown by the <see cref="ReceiveAsync(Memory{byte}, CancellationToken)" /> method or
+    ///     <see cref="WaitToReceiveAsync(CancellationToken)" /> method.
+    /// </param>
+    /// <returns>True if the current operation is canceled. False if there is no active send operation.</returns>
     public bool CancelPendingReceive(Exception? innerException, CancellationToken cancellationToken)
     {
         return _receiveQueue.CancelPendingOperation(innerException, cancellationToken);
     }
 
-    
+    /// <inheritdoc />
     public void SetTransportClosed()
     {
         TransportClosed = true;
@@ -1452,7 +1452,7 @@ public sealed partial class KcpConversation : IKcpConversation, IKcpExceptionPro
         _queueItemCache.Clear();
     }
 
-    
+    /// <inheritdoc />
     public void Dispose()
     {
         var disposed = _disposed;

@@ -72,7 +72,7 @@ public class Crypto
         }
     }
 
-    
+    // Simple way to create a unique session key
     public static string CreateSessionKey(string accountUid)
     {
         var random = new byte[64];

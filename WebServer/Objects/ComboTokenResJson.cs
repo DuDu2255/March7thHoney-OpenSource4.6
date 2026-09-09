@@ -22,6 +22,6 @@ public class ComboTokenResJson
         public string? combo_token { get; set; }
         public string? open_id { get; set; }
         public string data { get; set; } = "{\"guest\":false}";
-        public string? fatigue_remind { get; set; } = null; 
+        public string? fatigue_remind { get; set; } = null; // ?
     }
 }

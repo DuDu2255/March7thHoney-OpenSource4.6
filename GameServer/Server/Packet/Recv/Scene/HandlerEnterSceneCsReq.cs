@@ -1,6 +1,5 @@
 using March7thHoney.GameServer.Server.Packet.Send.Scene;
 using March7thHoney.GameServer.Server.Packet.Send.TrainParty;
-using March7thHoney.GameServer.Server.Packet.Send.Player;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
 using March7thHoney.Util;
@@ -8,12 +7,10 @@ using March7thHoney.Util;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Scene;
 
 [Opcode(CmdIds.EnterSceneCsReq)]
-public class HandlerEnterSceneCsReq : Handler
+public class HandlerEnterSceneCsReq : Handler<EnterSceneCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, EnterSceneCsReq req)
     {
-        var req = EnterSceneCsReq.Parser.ParseFrom(data);
-        var player = connection.Player!;
         var storyLineId = (int)(req.SceneIdentifier?.GameStoryLineId ?? 0);
         var socialTeleportId = (uint)(req.SceneIdentifier?.TeleportInfo?.TeleportId ?? 0u);
         var socialTeleportReason = (int)(req.SceneIdentifier?.TeleportInfo?.Reason ?? 0);
@@ -45,13 +42,13 @@ public class HandlerEnterSceneCsReq : Handler
         {
             player.TrainCakeCatchManager!.PrepareSocialPlayRoom(roomOwnerUid);
 
-            
-            
-            
+            // Social-play uses the room owner uid as an identifier, not a real map teleport id.
+            // Private-server uids like 10001 can collide with actual teleport mapping ids, which
+            // sends the player to the wrong anchor if we pass them through Player.EnterScene(...).
             teleportId = 0;
 
-            
-            
+            // Once a social room is active, reuse its already-loaded entry so later greets/switches
+            // land in the same scene instance instead of rebuilding a parallel copy of the room.
             if (socialSceneContext != null)
                 sceneEntryId = socialSceneContext.EntryId;
 
@@ -60,9 +57,9 @@ public class HandlerEnterSceneCsReq : Handler
                 var leavePacket = new BasePacket(CmdIds.SocialPlayGameplayOperationScNotify);
                 leavePacket.SetData(new SocialPlayGameplayOperationScNotify
                 {
-                    MFBDMLPDEOE = previousRoomOwnerUid.Value,
-                    NCFHGIBCEBG = (uint)player.Uid,
-                    NEAIFLAADFE = (uint)player.Uid
+                    RoomOwnerUid = previousRoomOwnerUid.Value,
+                    OpUid = (uint)player.Uid,
+                    BJLCBAAKPDI = (uint)player.Uid
                 });
                 await connection.SendPacket(leavePacket);
             }
@@ -72,9 +69,9 @@ public class HandlerEnterSceneCsReq : Handler
                 var gameplayTypePacket = new BasePacket(CmdIds.SocialPlayGameplayOperationScNotify);
                 gameplayTypePacket.SetData(new SocialPlayGameplayOperationScNotify
                 {
-                    MFBDMLPDEOE = roomOwnerUid,
-                    NCFHGIBCEBG = (uint)player.Uid,
-                    PAIBKOMPFOE = player.TrainCakeCatchManager.GetGameplayType(roomOwnerUid, (uint)player.Uid)
+                    RoomOwnerUid = roomOwnerUid,
+                    OpUid = (uint)player.Uid,
+                    DLKOEIANIMK = player.TrainCakeCatchManager.GetGameplayType(roomOwnerUid, (uint)player.Uid)
                 });
                 await connection.SendPacket(gameplayTypePacket);
             }
@@ -109,16 +106,16 @@ public class HandlerEnterSceneCsReq : Handler
         var roomSnapshotPacket = new BasePacket(CmdIds.SocialPlayGameplayOperationScNotify);
         roomSnapshotPacket.SetData(new SocialPlayGameplayOperationScNotify
         {
-            MFBDMLPDEOE = roomOwnerUid,
-            NCFHGIBCEBG = (uint)player.Uid,
-            INPEGNFEPAP = roomData
+            RoomOwnerUid = roomOwnerUid,
+            OpUid = (uint)player.Uid,
+            LABNNEGJNHO = roomData
         });
         player.TrainCakeCatchManager.UpdateCurrentRoomSceneContext();
         await connection.SendPacket(roomSnapshotPacket);
 
-        
-        
-        
+        // When the room owner greets a visitor, the existing visitor previously only received the
+        // owner join notify. Send a refreshed room snapshot as well so the visitor's room state
+        // upgrades from the placeholder-owner view to the fully attached owner view.
         if (isOwnerSocialEnter)
             await player.TrainCakeCatchManager.BroadcastRoomSnapshotAsync();
 
@@ -137,9 +134,10 @@ public class HandlerEnterSceneCsReq : Handler
 
         var serverProfileUid = (uint)ConfigManager.Config.ServerOption.ServerProfile.Uid;
         if (teleportId == serverProfileUid)
+            // The shared server-profile uid is used like a social-play entry point in some flows.
+            // Mapping it to the caller's own uid keeps the player in a stable self-room.
             return (uint)playerUid;
 
         return teleportId;
     }
 }
-

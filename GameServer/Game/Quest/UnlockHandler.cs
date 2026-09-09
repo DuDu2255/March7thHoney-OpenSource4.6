@@ -14,12 +14,12 @@ public class UnlockHandler(PlayerInstance player)
         GameData.FuncUnlockDataData.TryGetValue(unlockId, out var unlockData);
         if (unlockData == null) return false;
 
-        
+        // judge
         foreach (var condition in unlockData.Conditions)
             switch (condition.Type)
             {
                 case ConditionTypeEnum.WorldLevel:
-                    if (Player.Data.WorldLevel < int.Parse(condition.Param)) return false; 
+                    if (Player.Data.WorldLevel < int.Parse(condition.Param)) return false; // less than it
                     break;
                 case ConditionTypeEnum.FinishMainMission:
                     if (Player.MissionManager?.GetMainMissionStatus(int.Parse(condition.Param)) !=
@@ -48,7 +48,7 @@ public class UnlockHandler(PlayerInstance player)
                     }
                     else
                     {
-                        hasPath = Player.AvatarManager?.AvatarData.FormalAvatars.Any(x =>
+                        hasPath = Player.AvatarManager?.Data.FormalAvatars.Any(x =>
                             x.AvatarId == pathAvatarId || x.PathInfos.ContainsKey(pathAvatarId)) == true;
                     }
 

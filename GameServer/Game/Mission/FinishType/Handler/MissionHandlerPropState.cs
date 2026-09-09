@@ -12,7 +12,7 @@ public class MissionHandlerPropState : MissionFinishTypeHandler
 {
     public override async ValueTask HandleMissionFinishType(PlayerInstance player, SubMissionInfo info, object? arg)
     {
-        if (player.SceneInstance?.FloorId != info.LevelFloorID) return; 
+        if (player.SceneInstance?.FloorId != info.LevelFloorID) return; // not a same scene
         var prop = player.SceneInstance.GetEntitiesInGroup<EntityProp>(info.ParamInt1);
 
         foreach (var p in prop)
@@ -26,7 +26,7 @@ public class MissionHandlerPropState : MissionFinishTypeHandler
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        if (player.SceneInstance?.FloorId != excel.MazeFloorID) return; 
+        if (player.SceneInstance?.FloorId != excel.MazeFloorID) return; // not a same scene
         var prop = player.SceneInstance.GetEntitiesInGroup<EntityProp>(excel.ParamInt1);
 
         foreach (var p in prop)

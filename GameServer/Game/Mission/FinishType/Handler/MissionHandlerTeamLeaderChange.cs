@@ -17,7 +17,7 @@ public class MissionHandlerTeamLeaderChange : MissionFinishTypeHandler
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // this type wont be used in quest
         await ValueTask.CompletedTask;
     }
 }

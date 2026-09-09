@@ -4,7 +4,7 @@ public class RotatableRegionSceneComponent(SceneInstance scene) : BaseSceneCompo
 {
     public override async ValueTask Initialize()
     {
-        
+        // TODO
         await ValueTask.CompletedTask;
     }
 }

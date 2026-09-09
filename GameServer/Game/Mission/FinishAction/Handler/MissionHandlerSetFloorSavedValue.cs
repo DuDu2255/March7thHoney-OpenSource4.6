@@ -18,10 +18,10 @@ public class MissionHandlerSetFloorSavedValue : MissionFinishActionHandler
             player.SceneData.FloorSavedData[floor] = value;
         }
 
-        value[paramString[2]] = int.Parse(paramString[3]); 
+        value[paramString[2]] = int.Parse(paramString[3]); // ParamString[2] is the key
         await player.SendPacket(
             new PacketUpdateFloorSavedValueNotify(paramString[2], int.Parse(paramString[3]), player));
 
-        player.TaskManager?.SceneTaskTrigger.TriggerFloor(plane, floor);
+        player.TaskManager?.SceneTaskTrigger.TriggerFloor(plane, floor, player.SceneInstance);
     }
 }

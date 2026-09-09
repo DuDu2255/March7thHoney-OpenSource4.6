@@ -20,7 +20,7 @@ public class MissionHandlerRaidFinishCnt : MissionFinishTypeHandler
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // this type wont be used in quest
         var finishCount = excel.ParamIntList.Count(raidLevel =>
             player.RaidManager!.GetRaidStatus(excel.ParamInt1, raidLevel) == RaidStatus.Finish);
 

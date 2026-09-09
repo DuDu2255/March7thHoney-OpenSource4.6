@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Data;
 using March7thHoney.Data.Excel;
 using March7thHoney.Database.Inventory;
@@ -6,21 +7,20 @@ using March7thHoney.Enums.Avatar;
 using March7thHoney.Enums.Item;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using SqlSugar;
 using LineupInfo = March7thHoney.Database.Lineup.LineupInfo;
 
 namespace March7thHoney.Database.Avatar;
 
-[SugarTable("Avatar")]
+[DbTable("Avatar")]
 public class AvatarData : BaseDatabaseDataHelper
 {
-    [SugarColumn(IsJson = true)] public List<OldAvatarInfo> Avatars { get; set; } = [];
-    [SugarColumn(IsJson = true)] public List<FormalAvatarInfo> FormalAvatars { get; set; } = [];
-    [SugarColumn(IsJson = true)] public List<SpecialAvatarInfo> TrialAvatars { get; set; } = [];
+    public List<OldAvatarInfo> Avatars { get; set; } = [];
+    public List<FormalAvatarInfo> FormalAvatars { get; set; } = [];
+    public List<SpecialAvatarInfo> TrialAvatars { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<int> AssistAvatars { get; set; } = [];
+    public List<int> AssistAvatars { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<int> DisplayAvatars { get; set; } = [];
+    public List<int> DisplayAvatars { get; set; } = [];
 
     public string DatabaseVersion { get; set; } = "0";
 }
@@ -28,7 +28,7 @@ public class AvatarData : BaseDatabaseDataHelper
 public abstract class BaseAvatarInfo
 {
     public int BaseAvatarId { get; set; }
-    public int AvatarId { get; set; } 
+    public int AvatarId { get; set; } // special avatar id / base avatar id
     public int Promotion { get; set; }
     public int Level { get; set; }
     public int CurrentHp { get; set; } = 10000;
@@ -86,16 +86,17 @@ public abstract class BaseAvatarInfo
     public abstract Proto.Avatar ToProto();
 }
 
-public class FormalAvatarInfo : BaseAvatarInfo
+[MemoryPackable]
+public partial class FormalAvatarInfo : BaseAvatarInfo
 {
+    [MemoryPackConstructor]
     public FormalAvatarInfo()
     {
-        
+        // only for db
     }
 
     public FormalAvatarInfo(int baseAvatarId, int avatarId, bool addSkills)
     {
-        
         BaseAvatarId = baseAvatarId;
         AvatarId = avatarId;
         if (addSkills) CheckPathSkillTree();
@@ -111,24 +112,13 @@ public class FormalAvatarInfo : BaseAvatarInfo
         return (Rewards & (1 << promotion)) != 0;
     }
 
-    public void ValidateHero(Gender gender)
-    {
-        foreach (var pathInfo in PathInfos.ToArray())
-        {
-            if (!GameData.MultiplePathAvatarConfigData.TryGetValue(pathInfo.Key, out var path)) continue;
-            if (path.Gender == GenderTypeEnum.GENDER_NONE) continue;
-            if (path.Gender == (GenderTypeEnum)gender) continue;
-            PathInfos.Remove(pathInfo.Key);
-        }
-    }
-
     public void CheckPathSkillTree()
     {
         if (!GameData.AvatarConfigData.TryGetValue(AvatarId, out var excel)) return;
         if (PathInfos.ContainsKey(AvatarId)) return;
         if (excel.DefaultSkillTree[0].Count == 0) return;
 
-        
+        // create path info
         var path = new PathInfo(AvatarId);
         path.GetSkillTree();
 
@@ -183,38 +173,73 @@ public class FormalAvatarInfo : BaseAvatarInfo
 
     public override BattleAvatar ToBattleProto(PlayerDataCollection collection, AvatarType avatarType = AvatarType.AvatarFormalType)
     {
-        var proto = CreateBaseProto(collection, avatarType);
+        return ToBattleProto(collection, avatarType, AvatarId, GetCurPathInfo());
+    }
+
+    public BattleAvatar ToBattleProto(PlayerDataCollection collection, int avatarId,
+        AvatarType avatarType = AvatarType.AvatarFormalType)
+    {
+        return ToBattleProto(collection, avatarType, avatarId, CreateSerializationPathInfo(avatarId));
+    }
+
+    private BattleAvatar ToBattleProto(PlayerDataCollection collection, AvatarType avatarType,
+        int avatarId, PathInfo pathInfo)
+    {
+        var proto = CreateBaseProto(collection, avatarType, avatarId, pathInfo);
         var isUpgradable = IsUpgradableType(avatarType);
 
-        if (!GameData.AvatarConfigData.TryGetValue(AvatarId, out var avatarConf))
+        if (!GameData.AvatarConfigData.TryGetValue(avatarId, out var avatarConf))
             return proto;
 
         if (isUpgradable)
             ApplyMaxLevel(proto);
 
-        ProcessSkills(proto, isUpgradable);
-        ProcessRelics(proto, collection, isUpgradable);
-        ProcessEquipment(proto, collection, isUpgradable, avatarConf);
+        ProcessSkills(proto, isUpgradable, pathInfo);
+        ProcessRelics(proto, collection, isUpgradable, avatarId, pathInfo);
+        ProcessEquipment(proto, collection, isUpgradable, avatarConf, pathInfo);
 
         return proto;
     }
 
-    private BattleAvatar CreateBaseProto(PlayerDataCollection collection, AvatarType avatarType)
+    private PathInfo CreateSerializationPathInfo(int avatarId)
+    {
+        var source = PathInfos.GetValueOrDefault(avatarId);
+        var pathInfo = new PathInfo(avatarId)
+        {
+            Skin = source?.Skin ?? 0,
+            Rank = source?.Rank ?? 0,
+            EquipId = source?.EquipId ?? 0,
+            Relic = source?.Relic.ToDictionary(entry => entry.Key, entry => entry.Value) ?? [],
+            EquipData = source?.EquipData?.Clone(),
+            EnhanceId = source?.EnhanceId ?? 0,
+            EnhanceInfos = source?.EnhanceInfos.ToDictionary(
+                entry => entry.Key,
+                entry => new EnhanceInfo(entry.Value.EnhanceId)
+                {
+                    SkillTree = new Dictionary<int, int>(entry.Value.SkillTree)
+                }) ?? []
+        };
+        pathInfo.GetSkillTree();
+        return pathInfo;
+    }
+
+    private BattleAvatar CreateBaseProto(PlayerDataCollection collection, AvatarType avatarType,
+        int avatarId, PathInfo pathInfo)
     {
         var isBattle = collection.LineupInfo.LineupType != 0;
 
         return new BattleAvatar
         {
-            Id = (uint)AvatarId,
+            Id = (uint)avatarId,
             AvatarType = avatarType,
             Level = (uint)Level,
             Promotion = (uint)Promotion,
-            Rank = (uint)GetCurPathInfo().Rank,
+            Rank = (uint)pathInfo.Rank,
             Index = (uint)collection.LineupInfo.GetSlot(BaseAvatarId),
             Hp = (uint)GetCurHp(isBattle),
             SpBar = new SpBarInfo { CurSp = (uint)GetCurSp(isBattle), MaxSp = 10000 },
             WorldLevel = (uint)collection.PlayerData.WorldLevel,
-            EnhancedId = (uint)GetCurPathInfo().EnhanceId
+            EnhancedId = (uint)pathInfo.EnhanceId
         };
     }
 
@@ -227,9 +252,9 @@ public class FormalAvatarInfo : BaseAvatarInfo
         proto.Promotion = 6;
     }
 
-    private void ProcessSkills(BattleAvatar proto, bool isUpgradable)
+    private void ProcessSkills(BattleAvatar proto, bool isUpgradable, PathInfo pathInfo)
     {
-        foreach (var (skillId, level) in GetCurPathInfo().GetSkillTree())
+        foreach (var (skillId, level) in pathInfo.GetSkillTree())
         {
             var finalLevel = isUpgradable ? GetUpgradedSkillLevel(skillId, level) : level;
 
@@ -247,14 +272,15 @@ public class FormalAvatarInfo : BaseAvatarInfo
         return Math.Max(Math.Max(1, maxLevel - 2), currentLevel);
     }
 
-    private void ProcessRelics(BattleAvatar proto, PlayerDataCollection collection, bool isUpgradable)
+    private void ProcessRelics(BattleAvatar proto, PlayerDataCollection collection, bool isUpgradable,
+        int avatarId, PathInfo pathInfo)
     {
-        var relicUpgradeType = GameData.UpgradeAvatarSubTypeData.GetValueOrDefault((uint)AvatarId)?.SubType
+        var relicUpgradeType = GameData.UpgradeAvatarSubTypeData.GetValueOrDefault((uint)avatarId)?.SubType
                              ?? UpgradeAvatarSubRelicTypeEnum.Base;
-        var relicRecommend = GameData.AvatarRelicRecommendData.GetValueOrDefault((uint)AvatarId);
+        var relicRecommend = GameData.AvatarRelicRecommendData.GetValueOrDefault((uint)avatarId);
 
-        
-        var equippedRelics = GetCurPathInfo().Relic;
+        // Ensure all relic slots exist
+        var equippedRelics = pathInfo.Relic;
         for (var slot = 1; slot <= 6; slot++)
             equippedRelics.TryAdd(slot, 0);
 
@@ -271,11 +297,11 @@ public class FormalAvatarInfo : BaseAvatarInfo
     {
         var item = collection.InventoryData.RelicItems.Find(x => x.UniqueId == relicId);
 
-        
+        // Use existing relic if not upgradable or already maxed
         if (item != null && (!isUpgradable || item.Level >= 15 || recommend == null))
             return CreateRelicFromItem(item);
 
-        
+        // Create internal relic for upgrade scenario
         return isUpgradable ? CreateInternalRelic(slot, upgradeType, recommend) : null;
     }
 
@@ -360,10 +386,11 @@ public class FormalAvatarInfo : BaseAvatarInfo
         return battleRelic;
     }
 
-    private void ProcessEquipment(BattleAvatar proto, PlayerDataCollection collection, bool isUpgradable, AvatarConfigExcel avatarConf)
+    private void ProcessEquipment(BattleAvatar proto, PlayerDataCollection collection, bool isUpgradable,
+        AvatarConfigExcel avatarConf, PathInfo pathInfo)
     {
-        var equipId = GetCurPathInfo().EquipId;
-        var equipData = GetCurPathInfo().EquipData;
+        var equipId = pathInfo.EquipId;
+        var equipData = pathInfo.EquipData;
 
         if (equipId != 0)
         {
@@ -549,7 +576,8 @@ public class FormalAvatarInfo : BaseAvatarInfo
     }
 }
 
-public class SpecialAvatarInfo : BaseAvatarInfo
+[MemoryPackable]
+public partial class SpecialAvatarInfo : BaseAvatarInfo
 {
     public int SpecialAvatarId { get; set; }
 
@@ -679,7 +707,8 @@ public class SpecialAvatarInfo : BaseAvatarInfo
     }
 }
 
-public class OldAvatarInfo
+[MemoryPackable]
+public partial class OldAvatarInfo
 {
     public int AvatarId { get; set; }
 
@@ -697,19 +726,20 @@ public class OldAvatarInfo
     public Dictionary<int, int> SkillTree { get; set; } = [];
 
     public Dictionary<int, Dictionary<int, int>> SkillTreeExtra { get; set; } =
-        []; 
+        []; // for hero  heroId -> skillId -> level
 
     public Dictionary<int, PathInfo> PathInfoes { get; set; } = [];
 }
 
-public class PathInfo(int pathId)
+[MemoryPackable]
+public partial class PathInfo(int pathId)
 {
     public int PathId { get; set; } = pathId;
     public int Skin { get; set; }
     public int Rank { get; set; }
     public int EquipId { get; set; } = 0;
     public Dictionary<int, int> Relic { get; set; } = [];
-    public ItemData? EquipData { get; set; } 
+    public ItemData? EquipData { get; set; } // for special avatar
     public int EnhanceId { get; set; }
     public Dictionary<int, EnhanceInfo> EnhanceInfos { get; set; } = [];
 
@@ -723,7 +753,7 @@ public class PathInfo(int pathId)
 
         EnhanceInfos[EnhanceId] = new EnhanceInfo(EnhanceId);
 
-        
+        // create default skill tree
         var avatarExcel = GameData.AvatarConfigData.GetValueOrDefault(PathId);
         if (avatarExcel == null) return [];
 
@@ -735,10 +765,10 @@ public class PathInfo(int pathId)
         return EnhanceInfos[EnhanceId].SkillTree;
     }
 
-    
-    
-    
-    
+    // Legacy DB rows can hold enhanced-prefix PointIDs (e.g. 11004001) inside
+    // EnhanceInfos[0], so an unenhanced battle proto would leak them to the client
+    // and battle entry stalls. Remap any cached key whose AvatarSkillTreeConfig
+    // EnhancedID disagrees with the current EnhanceId by matching AnchorType slot.
     private void NormalizePointIdsForEnhanceId(EnhanceInfo enhance)
     {
         if (!GameData.AvatarConfigData.TryGetValue(PathId, out var pathExcel)) return;
@@ -762,9 +792,39 @@ public class PathInfo(int pathId)
             enhance.SkillTree[correct.PointID] = Math.Min(level, correct.MaxLevel);
         }
     }
+
+    // freesr carries one skill set; mirror imported levels onto every other enhance state by AnchorType slot.
+    public void MirrorSkillTreeToAllEnhanceStates(int sourceEnhanceId)
+    {
+        if (!GameData.AvatarConfigData.TryGetValue(PathId, out var pathExcel)) return;
+        if (!EnhanceInfos.TryGetValue(sourceEnhanceId, out var source)) return;
+
+        var levelBySlot = new Dictionary<int, int>();
+        foreach (var (pointId, level) in source.SkillTree)
+        {
+            if (!GameData.AvatarSkillTreeConfigData.TryGetValue(pointId * 100 + 1, out var ex)) continue;
+            var slot = ex.GetMultiPointId();
+            if (slot > 0) levelBySlot[slot] = level;
+        }
+
+        foreach (var (enhanceId, points) in pathExcel.SkillTree)
+        {
+            if (enhanceId == sourceEnhanceId) continue;
+            if (!EnhanceInfos.TryGetValue(enhanceId, out var target))
+                EnhanceInfos[enhanceId] = target = new EnhanceInfo(enhanceId);
+            target.SkillTree.Clear();
+            foreach (var point in points)
+            {
+                var slot = point.GetMultiPointId();
+                if (slot > 0 && levelBySlot.TryGetValue(slot, out var level))
+                    target.SkillTree[point.PointID] = Math.Min(level, point.MaxLevel);
+            }
+        }
+    }
 }
 
-public class EnhanceInfo(int enhanceId)
+[MemoryPackable]
+public partial class EnhanceInfo(int enhanceId)
 {
     public int EnhanceId { get; set; } = enhanceId;
     public Dictionary<int, int> SkillTree { get; set; } = [];

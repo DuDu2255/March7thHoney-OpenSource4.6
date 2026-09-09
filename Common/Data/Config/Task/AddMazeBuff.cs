@@ -1,13 +1,15 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class AddMazeBuff : TaskConfigInfo
+[MemoryPackable]
+public partial class AddMazeBuff : TaskConfigInfo
 {
-    public TargetEvaluator TargetType { get; set; } = new();
+    public TargetEvaluator TargetType { get; set; } = new UnknownTargetEvaluator();
     public int ID { get; set; }
-    public PredicateConfigInfo Condition { get; set; } = new();
-    public TargetEvaluator BindingAffectedTarget { get; set; } = new();
+    public PredicateConfigInfo Condition { get; set; } = new UnknownPredicateConfigInfo();
+    public TargetEvaluator BindingAffectedTarget { get; set; } = new UnknownTargetEvaluator();
     public DynamicFloat LifeTime { get; set; } = new();
     public DynamicFloat Count { get; set; } = new();
     public DynamicFloat Level { get; set; } = new();
@@ -25,19 +27,15 @@ public class AddMazeBuff : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.TargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 
         if (obj.TryGetValue(nameof(ID), out value)) info.ID = value.ToObject<int>()!;
         if (obj.TryGetValue(nameof(Condition), out value))
         {
-            var condition = value as JObject;
-            var classType =
-                System.Type.GetType(
-                    $"March7thHoney.Data.Config.Task.{condition?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.PredicateConfigInfo");
-            info.Condition = (condition!.ToObject(classType!) as PredicateConfigInfo)!;
+            if (value is JObject condition)
+                info.Condition = PredicateConfigInfo.LoadFromJsonObject(condition);
         }
 
         if (obj.TryGetValue(nameof(BindingAffectedTarget), out value))
@@ -46,7 +44,7 @@ public class AddMazeBuff : TaskConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{bindingAffectedTarget?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.BindingAffectedTarget = (bindingAffectedTarget!.ToObject(classType!) as TargetEvaluator)!;
         }
 

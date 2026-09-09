@@ -174,7 +174,7 @@ internal sealed class KcpConversationUpdateActivation : IValueTaskSource<KcpConv
     {
         private readonly KcpConversationUpdateActivation _parent;
 
-        private bool _available; 
+        private bool _available; // activeWait
         private CancellationTokenRegistration _cancellationRegistration;
         private CancellationToken _cancellationToken;
         private bool _disposed;

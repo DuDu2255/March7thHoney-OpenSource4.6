@@ -11,6 +11,6 @@ public class HandlerDiceCombatUpgradeAvatarCsReq : Handler
     {
         var req = DiceCombatUpgradeAvatarCsReq.Parser.ParseFrom(data);
         var instance = connection.Player!.ActivityManager!.DiceCombat;
-        await connection.SendPacket(new PacketUpgradeAvatarRsp(instance, req.AvatarId));
+        await connection.SendPacket(new PacketUpgradeAvatarRsp(instance, req.KOEOEHIMOEI));
     }
 }

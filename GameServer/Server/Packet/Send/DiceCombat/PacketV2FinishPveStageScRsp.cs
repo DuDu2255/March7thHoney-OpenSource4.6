@@ -10,7 +10,7 @@ public class PacketV2FinishPveStageScRsp : BasePacket
         SetData(new V2FinishPveStageScRsp
         {
             Retcode = 0,
-            MMLKFJIAKKH = stageId,
+            MPDHNFNCIEA = stageId,
             IsWin = isWin,
             Reward = new ItemList()
         });

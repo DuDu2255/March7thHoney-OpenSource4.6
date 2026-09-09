@@ -15,7 +15,7 @@ public class PacketGetPrivateChatHistoryScRsp : BasePacket
             TargetSide = targetSide
         };
 
-        
+        // ChatHistory is keyed by the other side's uid.
         var infos = player.FriendManager!.GetHistoryInfo((int)targetSide);
         proto.ChatMessageList.AddRange(infos);
 

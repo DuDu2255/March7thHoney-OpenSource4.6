@@ -1,10 +1,12 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.Task;
 
-public class ByIsContainAdventureModifier : PredicateConfigInfo
+[MemoryPackable]
+public partial class ByIsContainAdventureModifier : PredicateConfigInfo
 {
-    public TargetEvaluator TargetType { get; set; } = new();
+    public TargetEvaluator TargetType { get; set; } = new UnknownTargetEvaluator();
     public string ModifierName { get; set; } = "";
 
     public new static PredicateConfigInfo LoadFromJsonObject(JObject obj)
@@ -20,7 +22,7 @@ public class ByIsContainAdventureModifier : PredicateConfigInfo
             var classType =
                 System.Type.GetType(
                     $"March7thHoney.Data.Config.Task.{targetType?["Type"]?.ToString().Replace("RPG.GameCore.", "")}");
-            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.TargetEvaluator");
+            classType ??= System.Type.GetType("March7thHoney.Data.Config.Task.UnknownTargetEvaluator");
             info.TargetType = (targetType!.ToObject(classType!) as TargetEvaluator)!;
         }
 

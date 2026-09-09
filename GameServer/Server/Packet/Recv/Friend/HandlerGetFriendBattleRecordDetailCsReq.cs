@@ -9,14 +9,13 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Friend;
 
 [Opcode(CmdIds.GetFriendBattleRecordDetailCsReq)]
-public class HandlerGetFriendBattleRecordDetailCsReq : Handler
+public class HandlerGetFriendBattleRecordDetailCsReq : Handler<GetFriendBattleRecordDetailCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, GetFriendBattleRecordDetailCsReq req)
     {
-        var req = GetFriendBattleRecordDetailCsReq.Parser.ParseFrom(data);
         var uid = req.Uid;
 
-        
+        // get data from db
         var recordData = DatabaseHelper.Instance!.GetInstance<FriendRecordData>((int)uid);
         var challengeData = DatabaseHelper.Instance!.GetInstance<ChallengeData>((int)uid);
         var avatarData = DatabaseHelper.Instance!.GetInstance<AvatarData>((int)uid);

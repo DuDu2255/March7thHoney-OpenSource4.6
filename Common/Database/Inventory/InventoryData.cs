@@ -1,27 +1,28 @@
+using MemoryPack;
 using March7thHoney.Data;
 using March7thHoney.Data.Excel;
 using March7thHoney.Enums.Item;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using SqlSugar;
 
 namespace March7thHoney.Database.Inventory;
 
-[SugarTable("InventoryData")]
+[DbTable("InventoryData")]
 public class InventoryData : BaseDatabaseDataHelper
 {
-    [SugarColumn(IsJson = true)] public List<ItemData> MaterialItems { get; set; } = [];
+    public List<ItemData> MaterialItems { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<ItemData> EquipmentItems { get; set; } = [];
+    public List<ItemData> EquipmentItems { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public List<ItemData> RelicItems { get; set; } = [];
+    public List<ItemData> RelicItems { get; set; } = [];
 
-    [SugarColumn(IsJson = true)] public Dictionary<int, RelicPlanData> RelicPlans { get; set; } = [];
+    public Dictionary<int, RelicPlanData> RelicPlans { get; set; } = [];
 
     public int NextUniqueId { get; set; } = 100;
 }
 
-public class ItemData
+[MemoryPackable]
+public partial class ItemData
 {
     public int UniqueId { get; set; }
     public int ItemId { get; set; }
@@ -30,7 +31,7 @@ public class ItemData
     public int Exp { get; set; }
     public int TotalExp { get; set; }
     public int Promotion { get; set; }
-    public int Rank { get; set; } 
+    public int Rank { get; set; } // Superimpose
     public int TalentLevel { get; set; }
     public bool Locked { get; set; }
     public bool Discarded { get; set; }
@@ -138,13 +139,13 @@ public class ItemData
         }
     }
 
-    
-
-
-
-
-
-
+    /**
+     * Init relic sub affixes based on rarity
+     * 20% chance to get one more affix
+     * r3 1-2
+     * r4 2-3
+     * r5 3-4
+     */
     public void InitRandomRelicSubAffixesByRarity(ItemRarityEnum rarity = ItemRarityEnum.Unknown)
     {
         if (rarity == ItemRarityEnum.Unknown)
@@ -334,8 +335,10 @@ public class ItemData
     #endregion
 }
 
-public class ItemSubAffix
+[MemoryPackable]
+public partial class ItemSubAffix
 {
+    [MemoryPackConstructor]
     public ItemSubAffix()
     {
     }
@@ -378,7 +381,8 @@ public class ItemSubAffix
     }
 }
 
-public class RelicPlanData
+[MemoryPackable]
+public partial class RelicPlanData
 {
     public int EquipAvatar { get; set; }
     public List<int> InsideRelic { get; set; } = [];

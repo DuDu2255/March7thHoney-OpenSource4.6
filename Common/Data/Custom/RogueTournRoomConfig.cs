@@ -1,10 +1,12 @@
+using MemoryPack;
 using March7thHoney.Enums.TournRogue;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 namespace March7thHoney.Data.Custom;
 
-public class RogueTournRoomConfig
+[MemoryPackable]
+public partial class RogueTournRoomConfig
 {
     public int EntranceId { get; set; }
 
@@ -20,7 +22,7 @@ public class RogueTournRoomConfig
     public List<int> DefaultLoadBasicGroup { get; set; } = [];
     public List<int> DefaultLoadGroup { get; set; } = [];
 
-    public List<int> SubMonsterGroup { get; set; } = []; 
+    public List<int> SubMonsterGroup { get; set; } = []; // combine with DefaultLoadGroup
 
     public RogueTournRoomConfig Clone(RogueTournRoomTypeEnum type)
     {

@@ -123,11 +123,11 @@ public class CommandScene : ICommand
 
         if (arg.Target.Player.SceneInstance!.FloorId == 20431001)
         {
-            
+            // TODO temporary solution
             var savedValueName = "FSV_EnvLight";
             var savedValue = 5;
 
-            
+            // update floor saved data
             if (arg.Target.Player.SceneData!.FloorSavedData.TryGetValue(arg.Target.Player.SceneInstance!.FloorId,
                     out var savedData))
                 savedData[savedValueName] = savedValue;
@@ -138,7 +138,7 @@ public class CommandScene : ICommand
                         { savedValueName, savedValue }
                     };
 
-            
+            // send packet to client
             await arg.Target.Player.SendPacket(
                 new PacketUpdateFloorSavedValueNotify(savedValueName, savedValue, arg.Target.Player));
         }
@@ -323,7 +323,7 @@ public class CommandScene : ICommand
 
         posVec += normalizedVector * distance;
 
-        
+        // set pos
         await player.MoveTo(new Position((int)posVec.X, (int)posVec.Y, (int)posVec.Z));
         await arg.SendMsg(I18NManager.Translate("Game.Command.Scene.Teleported"));
     }

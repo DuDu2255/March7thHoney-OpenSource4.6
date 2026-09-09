@@ -7,18 +7,11 @@ public class PacketPlayBackGroundMusicScRsp : BasePacket
 {
     public PacketPlayBackGroundMusicScRsp(uint musicId) : base(CmdIds.PlayBackGroundMusicScRsp)
     {
-        var proto = new PlayBackGroundMusicScRsp
+        var proto = new EGDFPDHNOKO
         {
-            JILKOPINLDC = new MCPPIEJEBEF
-            {
-                LEKGBMCOJDB = new NKLAFFLJCHG
-                {
-                    Id = musicId
-                }
-            }
+            JKFCKJNHLHI = musicId
         };
 
         SetData(proto);
     }
 }
-

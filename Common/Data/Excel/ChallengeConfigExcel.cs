@@ -1,16 +1,18 @@
+using MemoryPack;
 using Newtonsoft.Json;
 
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("ChallengeMazeConfig.json,ChallengeStoryMazeConfig.json,ChallengeBossMazeConfig.json",
     true)]
-public class ChallengeConfigExcel : ExcelResource
+[MemoryPackable]
+public partial class ChallengeConfigExcel : ExcelResource
 {
     [JsonIgnore] public ChallengeBossExtraExcel? BossExcel;
 
     [JsonIgnore] public ChallengeStoryExtraExcel? StoryExcel;
 
-    
+    // General item data
     public int ID { get; set; }
     public int GroupID { get; set; }
     public int MapEntranceID { get; set; }
@@ -64,7 +66,7 @@ public class ChallengeConfigExcel : ExcelResource
 
     public override void Loaded()
     {
-        
+        // Cache challenge monsters
         for (var i = 0; i < ConfigList1?.Count; i++)
         {
             if (ConfigList1[i] == 0) break;
@@ -94,7 +96,8 @@ public class ChallengeConfigExcel : ExcelResource
     }
 
     [method: JsonConstructor]
-    public class ChallengeMonsterInfo(int configId, int npcMonsterId, int eventId)
+    [MemoryPackable]
+    public partial class ChallengeMonsterInfo(int configId, int npcMonsterId, int eventId)
     {
         public int ConfigId = configId;
         public int EventId = eventId;

@@ -2,7 +2,7 @@ namespace March7thHoney.Enums.Rogue;
 
 public enum RogueMiracleEffectTypeEnum
 {
-    
+    // effects
 
     None = 0,
     ExtraBuffSelect = 1,
@@ -28,7 +28,7 @@ public enum RogueMiracleEffectTypeEnum
     ChangeItemNumByArg = 21,
     ChangeItemRatioAndSetVar = 22,
 
-    
+    // events
 
     OnGetMiracle = 100,
     OnBattleStart = 101,
@@ -39,7 +39,7 @@ public enum RogueMiracleEffectTypeEnum
     OnDestroyProp = 106,
     OnGenerateBuffMenu = 107,
 
-    
+    // arguments
 
     CurMoney = 200,
     CurDestroyCount = 201,

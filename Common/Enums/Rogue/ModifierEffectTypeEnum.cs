@@ -1,11 +1,11 @@
 namespace March7thHoney.Enums.Rogue;
 
-
-
-
+/// <summary>
+///     Original Name: ModifierEffectType
+/// </summary>
 public enum ModifierEffectTypeEnum
 {
-    
+    // Fields
     None = 0,
     AddMazeBuff = 1,
     MoveChessRogueBoard = 2,

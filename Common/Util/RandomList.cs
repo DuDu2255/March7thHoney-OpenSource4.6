@@ -1,9 +1,9 @@
 namespace March7thHoney.Util;
 
-
-
-
-
+/// <summary>
+///     A list that can be used to randomly select an element with a certain weight from it.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public class RandomList<T>
 {
     private readonly List<T> _list = [];

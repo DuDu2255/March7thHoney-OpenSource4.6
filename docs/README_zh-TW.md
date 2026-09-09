@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
-  <img src="https://img.shields.io/badge/平台-Windows%20%7C%20Linux-2ea44f" alt="Platform" />
+  <img src="https://img.shields.io/badge/平台-Windows%20%7C%20Linux%20%7C%20macOS-2ea44f" alt="Platform" />
   <img src="https://img.shields.io/badge/狀態-持續開發-f39c12" alt="Status" />
   <img src="https://img.shields.io/badge/授權-GPLv3-blue" alt="License" />
 </p>
@@ -71,7 +71,7 @@ March7thHoney 是一個基於 .NET 10 的伺服器專案。
 
 - .NET SDK 10
 - Git
-- Windows 或 Linux（`x64` / `arm64`）
+- Windows、Linux 或 macOS（`x64` / `arm64`）
 
 ## 快速啟動
 
@@ -97,6 +97,14 @@ dotnet build program/program.csproj -c Release
 | `win-x64` | `March7thHoney-win-x64` |
 | `linux-x64` | `March7thHoney-linux-x64` |
 | `linux-arm64` | `March7thHoney-linux-arm64` |
+
+<details>
+<summary>手動發佈說明</summary>
+
+- 在 Actions 儲存配額緊張時，建議僅手動觸發上傳產物。
+- 若配額超限，請清理歷史產物或等待平台重新計算用量。
+
+</details>
 
 ## 說明
 

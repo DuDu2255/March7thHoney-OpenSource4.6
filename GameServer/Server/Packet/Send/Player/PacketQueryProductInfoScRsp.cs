@@ -5,8 +5,6 @@ using March7thHoney.GameServer.Game.Player;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using Newtonsoft.Json.Linq;
-using System.Reflection;
 
 namespace March7thHoney.GameServer.Server.Packet.Send.Player;
 
@@ -16,35 +14,37 @@ public class PacketQueryProductInfoScRsp : BasePacket
     {
         var proto = new QueryProductInfoScRsp
         {
-            BAMOOGPNJEH = 5,
-            IFKKKLCFOBK = 5,
             MonthCardOutDateTime = playerData == null ? 0 : (ulong)MonthCardService.GetMonthCardOutDateTime(playerData)
         };
 
-        foreach (var item in BuildProducts(GameData.QueryProductInfoConfig, ConfigManager.Config.ServerOption.EnableMonthCard))
+        foreach (var item in BuildProducts(GameData.QueryProductInfoConfig, playerData))
             proto.ProductList.Add(item);
 
         SetData(proto);
     }
 
-    private static List<Product> BuildProducts(QueryProductInfoConfig config, bool enableMonthCard)
+    private static List<Product> BuildProducts(QueryProductInfoConfig config, PlayerData? playerData)
     {
+        var now = ServerTimeProvider.GetServerUnixSec(playerData);
         List<Product> products = [];
         foreach (var item in config.ProductList)
         {
-            var giftType = ParseGiftType(item.GiftType);
-            if (!enableMonthCard && giftType == ProductGiftType.ProductGiftMonthCard) continue;
+            var giftType = ParseGiftTypeFromString(item.GiftType);
+            if (!IsGiftTypeEnabled(giftType)) continue;
+            if (item.EndTime > 0 && item.EndTime <= now) continue;
 
             products.Add(new Product
             {
-                JCJGHCOEOOJ = item.JCJGHCOEOOJ,
-                MEMNCJLKAEE = item.MEMNCJLKAEE,
-                EEFHEBKHKAB = item.EEFHEBKHKAB,
+                MaxBuyTimes = item.MaxBuyTimes,
+                GiftVersion = item.GiftVersion,
+                BuyTimes = item.BuyTimes,
                 BeginTime = item.BeginTime,
                 EndTime = item.EndTime,
                 GiftType = giftType,
-                PriceTier = item.PriceTier ?? "",
-                ProductId = item.ProductId ?? "",
+                // The 4.5v3 proto names these two strings the wrong way round: the client reads its
+                // ProductID (the RechargeConfig key) from price_tier.
+                PriceTier = item.ProductId ?? "",
+                ProductId = item.PriceTier ?? "",
                 DoubleReward = item.DoubleReward
             });
         }
@@ -52,35 +52,33 @@ public class PacketQueryProductInfoScRsp : BasePacket
         return products;
     }
 
-    private static ProductGiftType ParseGiftType(object raw)
+    private static bool IsGiftTypeEnabled(ProductGiftType giftType)
     {
-        if (raw is null) return ProductGiftType.ProductGiftNone;
-
-        if (raw is long l) return (ProductGiftType)l;
-        if (raw is int i) return (ProductGiftType)i;
-        if (raw is JValue jv)
+        return giftType switch
         {
-            if (jv.Type == JTokenType.Integer) return (ProductGiftType)jv.Value<long>();
-            var strValue = jv.Value<string>();
-            if (!string.IsNullOrWhiteSpace(strValue)) return ParseGiftTypeFromString(strValue);
-            return ProductGiftType.ProductGiftNone;
-        }
-
-        return ParseGiftTypeFromString(raw.ToString() ?? "");
+            ProductGiftType.ProductGiftMonthCard => ConfigManager.Config.ServerOption.EnableMonthCard,
+            ProductGiftType.ProductGiftCoin => ConfigManager.Config.ServerOption.EnableFakeRecharge,
+            _ => false
+        };
     }
 
+    // The config uses official names (PRODUCT_GIFT_COIN) while the proto enum is ProductGiftCoin.
     private static ProductGiftType ParseGiftTypeFromString(string value)
     {
         if (long.TryParse(value, out var number)) return (ProductGiftType)number;
-        if (Enum.TryParse<ProductGiftType>(value, true, out var byName)) return byName;
 
-        foreach (var field in typeof(ProductGiftType).GetFields(BindingFlags.Public | BindingFlags.Static))
-        {
-            var attr = field.GetCustomAttribute<Google.Protobuf.Reflection.OriginalNameAttribute>();
-            if (attr != null && string.Equals(attr.Name, value, StringComparison.OrdinalIgnoreCase))
-                return (ProductGiftType)field.GetValue(null)!;
-        }
+        var normalized = NormalizeGiftType(value);
+        if (normalized.Length == 0) return ProductGiftType.ProductGiftNone;
+
+        foreach (var giftType in Enum.GetValues<ProductGiftType>())
+            if (NormalizeGiftType(giftType.ToString()) == normalized)
+                return giftType;
 
         return ProductGiftType.ProductGiftNone;
+    }
+
+    private static string NormalizeGiftType(string value)
+    {
+        return new string([.. value.Where(char.IsLetterOrDigit)]).ToUpperInvariant();
     }
 }

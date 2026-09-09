@@ -30,7 +30,7 @@ internal sealed class KcpSendQueue : IValueTaskSource<bool>, IValueTaskSource, I
     private bool _disposed;
     private bool _forStream;
     private ManualResetValueTaskSourceCore<bool> _mrvtsc;
-    private byte _operationMode; 
+    private byte _operationMode; // 0-send 1-flush 2-wait for space
     private bool _signled;
 
     private bool _transportClosed;
@@ -235,7 +235,7 @@ internal sealed class KcpSendQueue : IValueTaskSource<bool>, IValueTaskSource, I
             }
 
             var mss = _mss;
-            
+            // Make sure there is enough space.
             if (!allowPartialSend)
             {
                 var spaceAvailable = mss * (_capacity - _queue.Count);
@@ -258,7 +258,7 @@ internal sealed class KcpSendQueue : IValueTaskSource<bool>, IValueTaskSource, I
                 }
             }
 
-            
+            // Copy buffer content.
             bytesWritten = 0;
             if (_stream)
             {
@@ -341,7 +341,7 @@ internal sealed class KcpSendQueue : IValueTaskSource<bool>, IValueTaskSource, I
             if (!_stream && count > 256)
                 return new ValueTask<bool>(Task.FromException<bool>(ThrowHelper.NewMessageTooLargeForBufferArgument()));
 
-            
+            // synchronously put fragments into queue.
             while (count > 0 && _queue.Count < _capacity)
             {
                 var fragment = --count;
@@ -408,7 +408,7 @@ internal sealed class KcpSendQueue : IValueTaskSource<bool>, IValueTaskSource, I
             Debug.Assert(count >= 1);
 
             Debug.Assert(_stream);
-            
+            // synchronously put fragments into queue.
             while (count > 0 && _queue.Count < _capacity)
             {
                 var size = buffer.Length > mss ? mss : buffer.Length;

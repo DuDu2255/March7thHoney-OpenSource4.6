@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Enums.Item;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -5,7 +6,8 @@ using Newtonsoft.Json.Converters;
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("EquipmentConfig.json")]
-public class EquipmentConfigExcel : ExcelResource
+[MemoryPackable]
+public partial class EquipmentConfigExcel : ExcelResource
 {
     public int EquipmentID { get; set; }
     public bool Release { get; set; }
@@ -25,7 +27,6 @@ public class EquipmentConfigExcel : ExcelResource
 
     public override void Loaded()
     {
-        if (Release == false) return;
         GameData.EquipmentConfigData.Add(EquipmentID, this);
     }
 }

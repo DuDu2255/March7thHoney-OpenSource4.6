@@ -1,19 +1,19 @@
+using MemoryPack;
 using System.ComponentModel;
 using March7thHoney.Database.Avatar;
 using March7thHoney.Database.Quests;
 using March7thHoney.Proto;
 using Newtonsoft.Json;
-using SqlSugar;
 
 namespace March7thHoney.Database.Lineup;
 
-[SugarTable("Lineup")]
+[DbTable("Lineup")]
 public class LineupData : BaseDatabaseDataHelper
 {
-    public int CurLineup { get; set; } 
-    public int CurExtraLineup { get; set; } = -1; 
-    [SugarColumn(IsIgnore = true)] public int ExtraMpCount { get; set; }
-    [SugarColumn(IsJson = true)] public Dictionary<int, LineupInfo> Lineups { get; set; } = []; 
+    public int CurLineup { get; set; } // index of current lineup
+    public int CurExtraLineup { get; set; } = -1; // index of current extra lineup
+    [DbIgnore] public int ExtraMpCount { get; set; }
+    public Dictionary<int, LineupInfo> Lineups { get; set; } = []; // 9 * 4
 
     public int GetCurLineupIndex()
     {
@@ -21,7 +21,8 @@ public class LineupData : BaseDatabaseDataHelper
     }
 }
 
-public class LineupInfo
+[MemoryPackable]
+public partial class LineupInfo
 {
     public string? Name { get; set; }
     public int LineupType { get; set; }
@@ -29,9 +30,9 @@ public class LineupInfo
     public List<LineupAvatarInfo>? BaseAvatars { get; set; }
     [DefaultValue(5)] public int Mp { get; set; } = 5;
 
-    [JsonIgnore] public LineupData? LineupData { get; set; }
+    [JsonIgnore] [MemoryPackIgnore] public LineupData? LineupData { get; set; }
 
-    [JsonIgnore] public AvatarData? AvatarData { get; set; }
+    [JsonIgnore] [MemoryPackIgnore] public AvatarData? AvatarData { get; set; }
 
     public int GetSlot(int avatarId)
     {
@@ -53,8 +54,8 @@ public class LineupInfo
                 if (avatarInfo != null)
                 {
                     if (avatarInfo.GetCurHp(IsExtraLineup()) <= 0 && !allowRevive) continue;
-                    if (avatarInfo.GetCurHp(IsExtraLineup()) >= 10000 && count > 0) continue; 
-                    if (avatarInfo.GetCurHp(IsExtraLineup()) <= 0 && count < 0) continue; 
+                    if (avatarInfo.GetCurHp(IsExtraLineup()) >= 10000 && count > 0) continue; // full hp
+                    if (avatarInfo.GetCurHp(IsExtraLineup()) <= 0 && count < 0) continue; // dead
                     avatarInfo.SetCurHp(Math.Max(Math.Min(avatarInfo.GetCurHp(IsExtraLineup()) + count, 10000), 0),
                         IsExtraLineup());
                     result = true;
@@ -132,7 +133,7 @@ public class LineupInfo
 
         if (LineupType != (int)ExtraLineupType.LineupNone) info.Index = 0;
 
-        if (BaseAvatars?.Find(item => item.BaseAvatarId == LeaderAvatarId) != null) 
+        if (BaseAvatars?.Find(item => item.BaseAvatarId == LeaderAvatarId) != null) // find leader,if not exist,set to 0
             info.LeaderSlot = (uint)BaseAvatars.IndexOf(BaseAvatars.Find(item => item.BaseAvatarId == LeaderAvatarId)!);
         else
             info.LeaderSlot = 0;
@@ -142,7 +143,7 @@ public class LineupInfo
             {
                 if (avatar == null) continue;
 
-                if (avatar.AssistUid != 0) 
+                if (avatar.AssistUid != 0) // assist avatar
                 {
                     var assistPlayer = DatabaseHelper.Instance?.GetInstance<AvatarData>(avatar.AssistUid);
                     if (assistPlayer != null)
@@ -150,17 +151,17 @@ public class LineupInfo
                         var lineupAvatar = assistPlayer.FormalAvatars
                             ?.Find(item => item.BaseAvatarId == avatar.BaseAvatarId)
                             ?.ToLineupInfo(BaseAvatars.IndexOf(avatar), this, AvatarType.AvatarAssistType);
-                        if (lineupAvatar != null) info.AvatarList.Add(lineupAvatar); 
+                        if (lineupAvatar != null) info.AvatarList.Add(lineupAvatar); // assist avatar may not work
                     }
                 }
-                else if (avatar.SpecialAvatarId != 0) 
+                else if (avatar.SpecialAvatarId != 0) // special avatar
                 {
                     var lineupAvatar = AvatarData?.TrialAvatars
                         ?.Find(item => item.SpecialAvatarId == avatar.SpecialAvatarId)
                         ?.ToLineupInfo(BaseAvatars.IndexOf(avatar), this, AvatarType.AvatarTrialType);
                     if (lineupAvatar != null) info.AvatarList.Add(lineupAvatar);
                 }
-                else 
+                else // normal avatar
                 {
                     var lineupAvatar = AvatarData?.FormalAvatars
                         ?.Find(item => item.BaseAvatarId == avatar.BaseAvatarId)
@@ -183,7 +184,8 @@ public class LineupInfo
     }
 }
 
-public class LineupAvatarInfo
+[MemoryPackable]
+public partial class LineupAvatarInfo
 {
     public int BaseAvatarId { get; set; }
     public int AssistUid { get; set; }

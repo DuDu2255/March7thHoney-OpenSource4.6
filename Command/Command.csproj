@@ -17,8 +17,7 @@
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\GameServer\GameServer.csproj" />
     <ProjectReference Include="..\Proto\Proto.csproj" />
+    <ProjectReference Include="..\SourceGen\SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
-
-

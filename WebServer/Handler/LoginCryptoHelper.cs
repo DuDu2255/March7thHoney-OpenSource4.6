@@ -95,7 +95,7 @@ public static class LoginCryptoHelper
     {
         var normalized = pem.Replace("\\n", "\n").Trim();
 
-        
+        // Accept raw base64 key material in config and wrap it as PEM.
         if (!normalized.Contains("BEGIN", StringComparison.OrdinalIgnoreCase))
         {
             normalized = "-----BEGIN RSA PRIVATE KEY-----\n" + normalized + "\n-----END RSA PRIVATE KEY-----";

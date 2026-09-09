@@ -7,6 +7,7 @@ using March7thHoney.Data.Config.Scene;
 using March7thHoney.Data.Config.SummonUnit;
 using March7thHoney.Data.Custom;
 using March7thHoney.Data.Excel;
+using March7thHoney.Enums;
 using March7thHoney.Enums.Rogue;
 using March7thHoney.Enums.RogueMagic;
 using March7thHoney.Enums.TournRogue;
@@ -37,6 +38,10 @@ public class ResourceManager
 
     public static void LoadGameData()
     {
+        // Route Newtonsoft polymorphic Task/Predicate deserialization through the manual LoadFromJsonObject
+        // dispatch (the bases are abstract for MemoryPack). Only needed for offline cache generation.
+        Config.Task.PolymorphicJson.EnsureRegistered();
+
         LoadExcel();
 
         var t1 = Task.Run(LoadFloorInfo);
@@ -52,7 +57,7 @@ public class ResourceManager
         var t8 = Task.Run(LoadAdventureModifier);
         var t9 = Task.Run(LoadLocalPlayer);
         GameData.ActivityConfig = LoadCustomFile<ActivityConfig>("Activity", "ActivityConfig") ?? new ActivityConfig();
-        GameData.BannersConfig = LoadCustomFile<BannersConfig>("Banner", "Banners") ?? new BannersConfig();
+        GameData.BannersConfig = LoadBanners();
         GameData.VideoKeysConfig =
             LoadCustomFile<VideoKeysConfig>("VideoKeys", "VideoKeysConfig") ?? new VideoKeysConfig();
         GameData.QueryProductInfoConfig =
@@ -62,30 +67,64 @@ public class ResourceManager
             LoadCustomFile<SceneRainbowGroupPropertyConfig>("Scene Rainbow Group Property",
                 "SceneRainbowGroupProperty") ?? new SceneRainbowGroupPropertyConfig();
         GameData.ChallengePeakOverrideConfig =
-            LoadDataFile<ChallengePeakOverrideConfig>("ChallengePeak Override", "ChallengePeak") ??
+            LoadCustomFile<ChallengePeakOverrideConfig>("ChallengePeak Override", "ChallengePeak") ??
             new ChallengePeakOverrideConfig();
+        GameData.GridFightRewardRulesConfig =
+            LoadCustomFile<GridFightRewardRulesConfig>("GridFight Reward Rules", "GridFightRewardRules") ??
+            new GridFightRewardRulesConfig();
+        GameData.GridFightBasicOrbRewardsConfig =
+            LoadCustomFile<GridFightBasicOrbRewardsConfig>("GridFight Orb Rewards", "GridFightBasicOrbRewards") ??
+            new GridFightBasicOrbRewardsConfig();
+        GameData.GridFightRuntimeConfig =
+            LoadCustomFile<GridFightRuntimeConfig>("GridFight Runtime Config", "GridFightRuntime") ??
+            new GridFightRuntimeConfig();
+        GameData.GridFightBasicOrbRewardsConfig.RewardRules = GameData.GridFightRewardRulesConfig;
+        GameData.GridFightBasicOrbRewardsConfig.RuntimeConfig = GameData.GridFightRuntimeConfig;
         ApplyChallengePeakOverrides();
 
         Task.WaitAll(t1, t2, t3, t4, t5, t6, t8, t9);
 
-        
+        // copy modifiers
         foreach (var value in GameData.AdventureAbilityConfigListData.Values)
         foreach (var adventureModifierConfig in value?.GlobalModifiers ?? [])
             GameData.AdventureModifierData.Add(adventureModifierConfig.Key, adventureModifierConfig.Value);
     }
 
+    private static readonly List<string> MissingExcelFiles = [];
+
+    // Excel tables belonging to paused / uncompiled gameplay modules. Verified to have no live reader
+    // (only their own self-populating Loaded() hooks touch them), so they are skipped unless
+    // ServerOption.LoadPausedModuleData is enabled — see that flag for the rationale.
+    private static readonly string[] PausedModuleResourcePrefixes = ["MatchThree", "Marble", "Cake"];
+
+    private static bool IsPausedModuleResource(Type cls)
+    {
+        return PausedModuleResourcePrefixes.Any(prefix => cls.Name.StartsWith(prefix, StringComparison.Ordinal));
+    }
+
     public static void LoadExcel()
     {
-        var classes = Assembly.GetExecutingAssembly().GetTypes(); 
+        var classes = Assembly.GetExecutingAssembly().GetTypes(); // Get all classes in the assembly
         List<ExcelResource> resList = [];
+        lock (MissingExcelFiles)
+        {
+            MissingExcelFiles.Clear();
+        }
 
+        var loadPaused = ConfigManager.Config.ServerOption.LoadPausedModuleData;
         foreach (var cls in classes.Where(x => x.IsSubclassOf(typeof(ExcelResource))))
         {
+            if (!loadPaused && IsPausedModuleResource(cls)) continue;
             var res = LoadSingleExcelResource(cls);
             if (res != null) resList.AddRange(res);
         }
 
         foreach (var cls in resList) cls.AfterAllDone();
+
+        lock (MissingExcelFiles)
+        {
+            LogPartialMissingSummary("Excel", MissingExcelFiles.Count, MissingExcelFiles);
+        }
     }
 
     public static List<T>? LoadSingleExcel<T>(Type cls) where T : ExcelResource, new()
@@ -104,16 +143,24 @@ public class ResourceManager
         foreach (var fileName in attribute.FileName)
             try
             {
-                var path = ConfigManager.Config.Path.ResourcePath + "/ExcelOutput/" + fileName;
-                var file = new FileInfo(path);
-                if (!file.Exists)
+                var file = ConfigManager.Config.Path.ExcelOutputDirs
+                    .Select(dir => new FileInfo(
+                        Path.Combine(ConfigManager.Config.Path.ResourcePath, dir, fileName)))
+                    .FirstOrDefault(f => f.Exists);
+                if (file == null)
                 {
-                    
                     Logger.Warn(I18NManager.Translate("Server.ServerInfo.FailedToReadItem", fileName,
                         I18NManager.Translate("Word.NotFound")));
+                    lock (MissingExcelFiles)
+                    {
+                        MissingExcelFiles.Add(fileName);
+                    }
+
                     continue;
                 }
 
+                var badRecords = 0;
+                Exception? firstError = null;
                 var json = file.OpenText().ReadToEnd();
                 using (var reader = new JsonTextReader(new StringReader(json)))
                 {
@@ -122,52 +169,77 @@ public class ResourceManager
                     {
                         case JsonToken.StartArray:
                         {
-                            
+                            // array
                             var jArray = JArray.Parse(json);
                             foreach (var item in jArray)
-                            {
-                                var res = JsonConvert.DeserializeObject(item.ToString(), cls);
-                                resList.Add((ExcelResource)res!);
-                                ((ExcelResource?)res)?.Loaded();
-                                count++;
-                            }
+                                try
+                                {
+                                    var res = JsonConvert.DeserializeObject(item.ToString(), cls);
+                                    resList.Add((ExcelResource)res!);
+                                    ((ExcelResource?)res)?.Loaded();
+                                    count++;
+                                }
+                                catch (Exception ex)
+                                {
+                                    badRecords++;
+                                    firstError ??= ex;
+                                }
 
                             break;
                         }
                         case JsonToken.StartObject:
                         {
-                            
+                            // dictionary
                             var jObject = JObject.Parse(json);
                             foreach (var (_, obj) in jObject)
-                            {
-                                var instance = JsonConvert.DeserializeObject(obj!.ToString(), cls);
-
-                                if (((ExcelResource?)instance)?.GetId() == 0 || (ExcelResource?)instance == null)
+                                try
                                 {
-                                    
-                                    var nestedObject = JsonConvert.DeserializeObject<JObject>(obj.ToString());
+                                    var instance = JsonConvert.DeserializeObject(obj!.ToString(), cls);
 
-                                    foreach (var nestedItem in nestedObject ?? [])
+                                    if (((ExcelResource?)instance)?.GetId() == 0 || (ExcelResource?)instance == null)
                                     {
-                                        var nestedInstance =
-                                            JsonConvert.DeserializeObject(nestedItem.Value!.ToString(), cls);
-                                        resList.Add((ExcelResource)nestedInstance!);
-                                        ((ExcelResource?)nestedInstance)?.Loaded();
-                                        count++;
-                                    }
-                                }
-                                else
-                                {
-                                    resList.Add((ExcelResource)instance);
-                                    ((ExcelResource)instance).Loaded();
-                                }
+                                        // Deserialize as JObject to handle nested dictionaries
+                                        var nestedObject = JsonConvert.DeserializeObject<JObject>(obj.ToString());
 
-                                count++;
-                            }
+                                        foreach (var nestedItem in nestedObject ?? [])
+                                            try
+                                            {
+                                                var nestedInstance =
+                                                    JsonConvert.DeserializeObject(nestedItem.Value!.ToString(), cls);
+                                                resList.Add((ExcelResource)nestedInstance!);
+                                                ((ExcelResource?)nestedInstance)?.Loaded();
+                                                count++;
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                badRecords++;
+                                                firstError ??= ex;
+                                            }
+                                    }
+                                    else
+                                    {
+                                        resList.Add((ExcelResource)instance);
+                                        ((ExcelResource)instance).Loaded();
+                                    }
+
+                                    count++;
+                                }
+                                catch (Exception ex)
+                                {
+                                    badRecords++;
+                                    firstError ??= ex;
+                                }
 
                             break;
                         }
                     }
+                }
+
+                if (badRecords > 0)
+                {
+                    ResourceCache.IsComplete = false;
+                    Logger.Error(I18NManager.Translate("Server.ServerInfo.FailedToReadItem",
+                        $"{fileName} ({badRecords} records)", I18NManager.Translate("Word.Error")), firstError!);
                 }
 
                 resource.Finalized();
@@ -202,7 +274,7 @@ public class ResourceManager
 
         var files = directory.GetFiles();
 
-        
+        // Load floor infos in parallel
         var res = Parallel.ForEach(files, file =>
         {
             try
@@ -215,7 +287,7 @@ public class ResourceManager
                 if (info == null) return;
                 GameData.FloorInfoData[name] = info;
 
-                
+                // Load navmap infos
                 FileInfo navmapFile = new(ConfigManager.Config.Path.ResourcePath + "/" + info.NavmapConfigPath);
                 if (navmapFile.Exists)
                     try
@@ -237,7 +309,7 @@ public class ResourceManager
                                 I18NManager.Translate("Word.Error")), ex);
                     }
 
-                
+                // Load group infos sequentially to maintain order
                 foreach (var groupInfo in info.GroupInstanceList)
                 {
                     if (groupInfo.IsDelete) continue;
@@ -254,10 +326,10 @@ public class ResourceManager
                         if (group != null)
                         {
                             group.Id = groupInfo.ID;
-                            
+                            // Use a sorted collection or maintain order manually
                             info.Groups[groupInfo.ID] = group;
 
-                            
+                            // Load graph
                             var graphPath = ConfigManager.Config.Path.ResourcePath + "/" + group.LevelGraph;
                             var graphFile = new FileInfo(graphPath);
                             if (graphFile.Exists)
@@ -295,7 +367,7 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
 
         if (missingGroupInfos)
@@ -382,13 +454,95 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
 
         if (missingMissionInfos)
             LogPartialMissingSummary(I18NManager.Translate("Word.MissionInfo"), missingCount, missingFiles);
         Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", count.ToString(),
             I18NManager.Translate("Word.MissionInfo")));
+    }
+
+    /// <summary>
+    ///     Reads Config/Custom/Banners.json.
+    ///     Parsed entry by entry on purpose: a single bad row (most often a gachaType the server does not
+    ///     know) used to abort the whole file and leave the player with no banners at all, standard pool
+    ///     included. A broken row is now reported and skipped, and the rest still load.
+    ///     This is also NOT served from Resource.bin — see EntryPoint, where it is re-read after the cache
+    ///     path so operators can edit the banner list without regenerating the resource cache.
+    /// </summary>
+    public static BannersConfig LoadBanners()
+    {
+        const string filetype = "Banner";
+        Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadingItem", filetype));
+
+        var customPath = Path.Combine(ConfigManager.Config.Path.ConfigPath, "Custom", "Banners.json");
+        var legacyPath = Path.Combine(ConfigManager.Config.Path.ConfigPath, "Banners.json");
+        FileInfo file = new(File.Exists(customPath) ? customPath : legacyPath);
+        var config = new BannersConfig();
+
+        if (!file.Exists)
+        {
+            Logger.Warn(I18NManager.Translate("Server.ServerInfo.ConfigMissing", filetype,
+                $"{ConfigManager.Config.Path.ConfigPath}/Banners.json", filetype));
+            return config;
+        }
+
+        JToken token;
+        try
+        {
+            token = JToken.Parse(File.ReadAllText(file.FullName));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(
+                I18NManager.Translate("Server.ServerInfo.FailedToReadItem", file.Name,
+                    I18NManager.Translate("Word.Error")), ex);
+            return config;
+        }
+
+        var entries = token.Type == JTokenType.Array
+            ? token.Children().ToList()
+            : (token["Banners"] ?? token["banners"])?.Children().ToList() ?? [];
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (var entry in entries)
+        {
+            BannerConfig? banner;
+            try
+            {
+                banner = entry.ToObject<BannerConfig>();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Skipping a banner entry in {file.Name}: {ex.Message}");
+                continue;
+            }
+
+            if (banner == null) continue;
+
+            if (banner.GachaType == GachaTypeEnum.Unknown)
+            {
+                Logger.Warn($"Banner {banner.GachaId} in {file.Name} has no usable gachaType; skipped. " +
+                            "Valid values: Newbie, Normal, AvatarUp, WeaponUp, " +
+                            "CollaborationAvatarUp, CollaborationWeaponUp.");
+                continue;
+            }
+
+            // The client hides a pool outside its window, so a stale beginTime/endTime is by far the most
+            // common reason a freshly added event banner "does not show up". Say so instead of silently
+            // handing the client a banner it will never render.
+            if (!banner.IsActiveAt(now))
+                Logger.Warn(
+                    $"Banner {banner.GachaId} ({banner.GachaType}) is outside its time window " +
+                    $"(beginTime {banner.BeginTime}, endTime {banner.EndTime}, now {now}) and will not be " +
+                    "shown by the client.");
+
+            config.Banners.Add(banner);
+        }
+
+        Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", config.Banners.Count.ToString(), filetype));
+        return config;
     }
 
     public static T? LoadCustomFile<T>(string filetype, string filename)
@@ -410,26 +564,7 @@ public class ResourceManager
             using var reader = file.OpenRead();
             using StreamReader reader2 = new(reader);
             var text = reader2.ReadToEnd();
-            if (typeof(T) == typeof(BannersConfig))
-            {
-                var token = JToken.Parse(text);
-                if (token.Type == JTokenType.Array)
-                {
-                    var banners = token.ToObject<List<BannerConfig>>() ?? [];
-                    customFile = (T)(object)new BannersConfig
-                    {
-                        Banners = banners
-                    };
-                }
-                else
-                {
-                    customFile = JsonConvert.DeserializeObject<T>(text);
-                }
-            }
-            else
-            {
-                customFile = JsonConvert.DeserializeObject<T>(text);
-            }
+            customFile = JsonConvert.DeserializeObject<T>(text);
         }
         catch (Exception ex)
         {
@@ -475,34 +610,6 @@ public class ResourceManager
         return customFile;
     }
 
-    public static T? LoadDataFile<T>(string filetype, string filename)
-    {
-        Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadingItem", filetype));
-        var dataPath = Path.Combine(ConfigManager.Config.Path.ConfigPath, "Data", $"{filename}.json");
-        FileInfo file = new(dataPath);
-        if (!file.Exists)
-        {
-            Logger.Warn(I18NManager.Translate("Server.ServerInfo.ConfigMissing", filetype, dataPath, filetype));
-            return default;
-        }
-
-        try
-        {
-            using var reader = file.OpenRead();
-            using StreamReader reader2 = new(reader);
-            var text = reader2.ReadToEnd();
-            return JsonConvert.DeserializeObject<T>(text);
-        }
-        catch (Exception ex)
-        {
-            ResourceCache.IsComplete = false;
-            Logger.Error(
-                I18NManager.Translate("Server.ServerInfo.FailedToReadItem", file.Name,
-                    I18NManager.Translate("Word.Error")), ex);
-            return default;
-        }
-    }
-
     public static void ApplyChallengePeakOverrides()
     {
         foreach (var group in GameData.ChallengePeakOverrideConfig.ChallengePeak)
@@ -530,6 +637,8 @@ public class ResourceManager
                 levelExcel.RebuildChallengeMonsters();
             }
         }
+
+        GameData.SyncCurrentChallengePeakGroupId();
     }
 
     public static void LoadMazeSkill()
@@ -624,7 +733,7 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted || !res2.IsCompleted) Thread.Sleep(10);
 
         if (missingCount > 0)
@@ -676,7 +785,7 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
 
         if (missingCount > 0)
@@ -726,7 +835,7 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
 
         if (missingCount > 0)
@@ -802,14 +911,8 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!(res.IsCompleted && res2.IsCompleted)) Thread.Sleep(10);
-
-        if (count < GameData.PerformanceEData.Count + GameData.PerformanceDData.Count)
-        {
-            
-            
-        }
 
         Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", count.ToString(),
             I18NManager.Translate("Word.PerformanceInfo")));
@@ -846,13 +949,8 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
-
-        if (count < GameData.SubMissionInfoData.Count)
-        {
-            
-        }
 
         Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", count.ToString(),
             I18NManager.Translate("Word.SubMissionInfo")));
@@ -917,7 +1015,7 @@ public class ResourceManager
             I18NManager.Translate("Word.AdventureModifierInfo")));
         var count = 0;
 
-        
+        // list the files in folder
         var directory = new DirectoryInfo($"{ConfigManager.Config.Path.ResourcePath}/Config/ConfigAdventureModifier");
         if (!directory.Exists)
         {
@@ -954,12 +1052,6 @@ public class ResourceManager
                         I18NManager.Translate("Word.Error")), ex);
             }
 
-        
-        
-        
-        
-        
-
         Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", count.ToString(),
             I18NManager.Translate("Word.AdventureModifierInfo")));
     }
@@ -995,7 +1087,7 @@ public class ResourceManager
             }
         });
 
-        
+        // wait it done
         while (!res.IsCompleted) Thread.Sleep(10);
 
         if (count < GameData.SummonUnitDataData.Count)
@@ -1051,7 +1143,7 @@ public class ResourceManager
                     case RogueDLCBlockTypeEnum.Event:
                         AddRoomToGameData(RogueDLCBlockTypeEnum.Event, room);
                         AddRoomToGameData(RogueDLCBlockTypeEnum.Reward, room);
-                        AddRoomToGameData(RogueDLCBlockTypeEnum.Adventure, room); 
+                        AddRoomToGameData(RogueDLCBlockTypeEnum.Adventure, room); // adventure is not this type
                         AddRoomToGameData(RogueDLCBlockTypeEnum.NousSpecialEvent, room);
                         AddRoomToGameData(RogueDLCBlockTypeEnum.SwarmEvent, room);
                         AddRoomToGameData(RogueDLCBlockTypeEnum.NousEvent, room);
@@ -1277,51 +1369,6 @@ public class ResourceManager
             I18NManager.Translate("Word.DialogueInfo")));
     }
 
-    public static void LoadGridFightBasicRewardsData()
-    {
-        Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadingItem",
-            I18NManager.Translate("Word.GridFightRewardsInfo")));
-        var count = 0;
-
-        FileInfo file = new(ConfigManager.Config.Path.ConfigPath + "/GridFight/GridFightBasicOrbRewards.json");
-        if (!file.Exists)
-        {
-            Logger.Warn(I18NManager.Translate("Server.ServerInfo.ConfigMissing",
-                I18NManager.Translate("Word.GridFightRewardsInfo"),
-                $"{ConfigManager.Config.Path.ConfigPath}/GridFight/GridFightBasicOrbRewards.json",
-                I18NManager.Translate("Word.GridFightRewards")));
-            return;
-        }
-
-        try
-        {
-            using var reader = file.OpenRead();
-            using StreamReader reader2 = new(reader);
-            var text = reader2.ReadToEnd();
-            var json = JsonConvert.DeserializeObject<Dictionary<uint, Dictionary<uint, List<GridFightBasicBonusPoolV2Excel>>>>(text);
-            if (json == null) throw new Exception("Failed to deserialize GridFightBasicOrbRewards.json");
-            foreach (var reward in json)
-            {
-                GameData.GridFightBasicOrbRewardsConfig.OrbRewards.Add(reward.Key, new GridFightBasicOrbRewardsInfo
-                {
-                    OrbId = reward.Key,
-                    Rewards = reward.Value
-                });
-                count++;
-            }
-        }
-        catch (Exception ex)
-        {
-            ResourceCache.IsComplete = false;
-            Logger.Error(
-                I18NManager.Translate("Server.ServerInfo.FailedToReadItem", file.Name,
-                    I18NManager.Translate("Word.Error")), ex);
-        }
-
-        Logger.Info(I18NManager.Translate("Server.ServerInfo.LoadedItems", count.ToString(),
-            I18NManager.Translate("Word.GridFightRewardsInfo")));
-    }
-
     public static void AddRoomToGameData(RogueDLCBlockTypeEnum type, ChessRogueRoomConfig room)
     {
         if (GameData.ChessRogueRoomData.TryGetValue(type, out var list))
@@ -1330,6 +1377,3 @@ public class ResourceManager
             GameData.ChessRogueRoomData.Add(type, [room]);
     }
 }
-
-
-

@@ -1,4 +1,4 @@
-#if NEED_LINKEDLIST_SHIM
+﻿#if NEED_LINKEDLIST_SHIM
 using System;
 using System.Diagnostics;
 
@@ -6,7 +6,7 @@ namespace KcpSharp.NetstandardShim
 {
     internal class LinkedList<T>
     {
-        
+        // This LinkedList is a doubly-Linked circular list.
         internal LinkedListNode<T>? head;
         internal int count;
         internal int version;
@@ -83,7 +83,7 @@ namespace KcpSharp.NetstandardShim
             while (current != null)
             {
                 LinkedListNode<T> temp = current;
-                current = current.Next;   
+                current = current.Next;   // use Next the instead of "next", otherwise it will loop forever
                 temp.Invalidate();
             }
 
@@ -174,7 +174,7 @@ namespace KcpSharp.NetstandardShim
         }
     }
 
-    
+    // Note following class is not serializable since we customized the serialization of LinkedList.
     internal sealed class LinkedListNode<T>
     {
         internal LinkedList<T>? list;
@@ -197,7 +197,7 @@ namespace KcpSharp.NetstandardShim
             get { return prev == null || this == list!.head ? null : prev; }
         }
 
-        
+        /// <summary>Gets a reference to the value held by the node.</summary>
         public ref T ValueRef => ref item;
 
         internal void Invalidate()

@@ -4,22 +4,19 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Chat;
 
 [Opcode(CmdIds.SendMsgCsReq)]
-public class HandlerSendMsgCsReq : Handler
+public class HandlerSendMsgCsReq : Handler<SendMsgCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SendMsgCsReq req)
     {
-        var req = SendMsgCsReq.Parser.ParseFrom(data);
         var nestedChatData = req.MessageDatas?.ChatData;
 
         string? text = null;
-        if (nestedChatData?.HasMessageText == true)
+        if (!string.IsNullOrEmpty(nestedChatData?.MessageText))
             text = nestedChatData.MessageText;
 
         text = text?.Trim('\0').Trim();
 
-        var extraId = 0u;
-        if (nestedChatData?.HasExtraId == true)
-            extraId = nestedChatData.ExtraId;
+        var extraId = nestedChatData?.ExtraId ?? 0;
 
         var msgType = MsgType.None;
         if (req.MessageDatas != null && req.MessageDatas.MessageType != MsgType.None)
@@ -38,13 +35,12 @@ public class HandlerSendMsgCsReq : Handler
         foreach (var targetUid in req.TargetList)
         {
             if (msgType == MsgType.CustomText)
-                await connection.Player!.FriendManager!.SendMessage(connection.Player!.Uid, (int)targetUid, text);
+                await player.FriendManager!.SendMessage(player.Uid, (int)targetUid, text);
             else if (msgType == MsgType.Emoji)
-                await connection.Player!.FriendManager!.SendMessage(connection.Player!.Uid, (int)targetUid, null,
+                await player.FriendManager!.SendMessage(player.Uid, (int)targetUid, null,
                     (int)extraId);
         }
 
         await connection.SendPacket(CmdIds.SendMsgScRsp);
     }
 }
-

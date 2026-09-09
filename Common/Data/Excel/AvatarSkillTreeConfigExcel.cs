@@ -1,7 +1,11 @@
+using MemoryPack;
+using March7thHoney.Data.Config;
+
 namespace March7thHoney.Data.Excel;
 
 [ResourceEntity("AvatarSkillTreeConfig.json,AvatarSkillTreeConfigLD.json", true)]
-public class AvatarSkillTreeConfigExcel : ExcelResource
+[MemoryPackable]
+public partial class AvatarSkillTreeConfigExcel : ExcelResource
 {
     public int PointID { get; set; }
     public int Level { get; set; }
@@ -10,6 +14,7 @@ public class AvatarSkillTreeConfigExcel : ExcelResource
     public int EnhancedID { get; set; }
     public bool DefaultUnlock { get; set; }
     public int MaxLevel { get; set; }
+    public List<FixedValueInfo<double>> ParamList { get; set; } = [];
 
     public int GetMultiPointId()
     {

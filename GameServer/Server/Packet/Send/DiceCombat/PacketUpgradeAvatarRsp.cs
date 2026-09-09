@@ -1,4 +1,4 @@
-using March7thHoney.GameServer.Game.Activity.Activities.DiceCombat;
+using March7thHoney.GameServer.Game.MultiPlayer.DiceCombat;
 using March7thHoney.Kcp;
 using March7thHoney.Proto;
 
@@ -11,7 +11,7 @@ public class PacketUpgradeAvatarRsp : BasePacket
         SetData(new UpgradeAvatarRsp
         {
             Retcode = 0,
-            OJCBGGOEEIE = instance.FindAvatar(avatarId) ?? new DiceCombatAvatar { DiceAvatarId = avatarId }
+            Avatar = instance.FindAvatar(avatarId) ?? new DiceCombatAvatar { DiceAvatarId = avatarId }
         });
     }
 }

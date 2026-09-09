@@ -16,6 +16,7 @@ public static class CommandPermissions
     public const string Avatar = "command.avatar";
     public const string Calyx = "command.calyx";
     public const string Clear = "command.clear";
+    public const string FakeTime = "command.faketime";
     public const string Give = "command.give";
     public const string GiveAll = "command.giveall";
     public const string Grid = "command.grid";
@@ -25,6 +26,7 @@ public static class CommandPermissions
     public const string Kick = "command.kick";
     public const string Lineup = "command.lineup";
     public const string Mission = "command.mission";
+    public const string Peak = "command.peak";
     public const string Raid = "command.raid";
     public const string Relic = "command.relic";
     public const string Reload = "command.reload";
@@ -33,6 +35,7 @@ public static class CommandPermissions
     public const string UnlockAll = "command.unlockall";
     public const string Unstuck = "command.unstuck";
     public const string Windy = "command.windy";
+    public const string Htl = "command.htl";
 
     public const string Player = "command.player";
     public const string Inventory = "command.inventory";
@@ -118,6 +121,7 @@ public static class CommandPermissions
             Calyx,
             Clear,
             Debug,
+            FakeTime,
             Give,
             GiveAll,
             Grid,
@@ -128,6 +132,7 @@ public static class CommandPermissions
             Lineup,
             Mail,
             Mission,
+            Peak,
             Raid,
             Relic,
             Reload,
@@ -138,6 +143,7 @@ public static class CommandPermissions
             UnlockAll,
             Unstuck,
             Windy,
+            Htl,
             Player,
             Inventory,
             Progress,

@@ -1,8 +1,6 @@
 using March7thHoney.Data;
-using March7thHoney.Data.Excel;
 using March7thHoney.Database.Lineup;
 using March7thHoney.GameServer.Game.Battle;
-using March7thHoney.GameServer.Game.GridFight;
 using March7thHoney.GameServer.Game.Player;
 using March7thHoney.Proto;
 using LineupInfo = March7thHoney.Database.Lineup.LineupInfo;
@@ -11,53 +9,42 @@ namespace March7thHoney.GameServer.Game.GridFight.Battle;
 
 public static class GridFightBattleModule
 {
-    public static BattleInstance? StartBattle(PlayerInstance player, GridFightInstance gridFightInstance)
+    public static BattleInstance? StartBattle(
+        PlayerInstance player,
+        GridFightSession session,
+        GridFightResourceCatalog catalog)
     {
-        if (player.BattleInstance != null)
-            return player.BattleInstance;
+        if (player.BattleInstance != null) return player.BattleInstance;
+        if (!GameData.StageConfigData.TryGetValue((int)session.CurrentNode.StageId, out var stage)) return null;
 
-        var stageConfig = ResolveStageConfig(gridFightInstance);
-        if (stageConfig == null)
-            return null;
-
-        var foregroundIds = gridFightInstance.BuildForegroundAvatarIds();
-        var backgroundIds = gridFightInstance.BuildBackgroundAvatarIds();
-
-        var tempLineup = new LineupInfo
+        var avatars = new List<LineupAvatarInfo>();
+        foreach (var role in session.Roles.Where(role => role.Position is >= 1 and <= 13).OrderBy(role => role.Position))
         {
-            LineupType = (int)ExtraLineupType.LineupChessRogue,
-            BaseAvatars = foregroundIds.Concat(backgroundIds)
-                .Select(id => new LineupAvatarInfo { BaseAvatarId = id })
-                .ToList(),
-            AvatarData = player.AvatarManager?.AvatarData
-        };
+            if (!GameData.GridFightRoleBasicInfoData.TryGetValue(role.RoleId, out var basic)) continue;
+            var trial = player.AvatarManager!.GetTrialAvatarByWorldLevel(
+                (int)basic.SpecialAvatarID,
+                player.Data.WorldLevel);
+            avatars.Add(trial != null
+                ? new LineupAvatarInfo
+                {
+                    BaseAvatarId = (int)basic.AvatarID,
+                    SpecialAvatarId = (int)basic.SpecialAvatarID,
+                }
+                : new LineupAvatarInfo { BaseAvatarId = (int)basic.AvatarID });
+        }
 
-        var battle = new BattleInstance(player, tempLineup, [stageConfig])
+        var lineup = new LineupInfo
+        {
+            LineupType = (int)ExtraLineupType.LineupGridFight,
+            BaseAvatars = avatars,
+            AvatarData = player.AvatarManager!.Data,
+        };
+        var battle = new BattleInstance(player, lineup, [stage])
         {
             WorldLevel = player.Data.WorldLevel,
-            GridFightContext = gridFightInstance,
-            LogicRandomSeed = (uint)Random.Shared.Next()
+            GridFightContext = session,
         };
-
         player.BattleInstance = battle;
-        player.QuestManager?.OnBattleStart(battle);
         return battle;
-    }
-
-    private static StageConfigExcel? ResolveStageConfig(GridFightInstance gridFightInstance)
-    {
-        var configuredStageId = gridFightInstance.BattleComponent.StageId;
-        if (configuredStageId > 0
-            && GameData.StageConfigData.TryGetValue((int)configuredStageId, out var configuredStage))
-            return configuredStage;
-
-        var encounter = GridFightLevelResolver.Resolve(gridFightInstance);
-        if (GameData.StageConfigData.TryGetValue((int)encounter.StageId, out var encounterStage))
-            return encounterStage;
-
-        if (GameData.StageConfigData.TryGetValue((int)GridFightLevelResolver.UnifiedStageId, out var unifiedStage))
-            return unifiedStage;
-
-        return GameData.StageConfigData.Values.FirstOrDefault();
     }
 }

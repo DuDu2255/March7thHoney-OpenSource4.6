@@ -22,7 +22,7 @@ public class StoryLineEntityLoader(SceneInstance scene) : SceneEntityLoader(scen
         if (floorData == null) return;
 
         floorData.TryGetValue(Scene.FloorInfo?.FloorID ?? 0, out var floorInfo);
-        floorInfo ??= new StoryLineFloorDataExcel { DimensionID = 0 }; 
+        floorInfo ??= new StoryLineFloorDataExcel { DimensionID = 0 }; // Default
 
         var dim = Scene.FloorInfo?.DimensionList.Find(d => d.ID == floorInfo.DimensionID);
         if (dim == null) return;
@@ -31,7 +31,7 @@ public class StoryLineEntityLoader(SceneInstance scene) : SceneEntityLoader(scen
 
         LoadGroups.AddRange(dim.GroupIDList);
 
-        foreach (var group in Scene.FloorInfo?.Groups.Values!) 
+        foreach (var group in Scene.FloorInfo?.Groups.Values!) // Sanity check in SceneInstance
         {
             if (group.LoadSide == GroupLoadSideEnum.Client) continue;
             if (group.GroupName.Contains("TrainVisitor")) continue;

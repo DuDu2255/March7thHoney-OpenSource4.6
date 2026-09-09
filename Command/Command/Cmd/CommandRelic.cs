@@ -21,7 +21,7 @@ public class CommandRelic : ICommand
             return;
         }
 
-        
+        // Parse character
         arg.CharacterArgs.TryGetValue("x", out var str);
         arg.CharacterArgs.TryGetValue("l", out var levelStr);
         str ??= "1";
@@ -32,7 +32,7 @@ public class CommandRelic : ICommand
             return;
         }
 
-        
+        // Parse main affix
         var startIndex = 1;
         var mainAffixId = 0;
         if (!arg.BasicArgs[1].Contains(':'))
@@ -41,7 +41,7 @@ public class CommandRelic : ICommand
             startIndex++;
         }
 
-        
+        // Parse sub affixes
         var subAffixes = new List<(int, int)>();
         for (var ii = startIndex; ii < arg.BasicArgs.Count; ii++)
         {

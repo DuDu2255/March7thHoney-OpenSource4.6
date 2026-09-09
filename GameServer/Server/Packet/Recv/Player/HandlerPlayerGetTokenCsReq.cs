@@ -28,7 +28,7 @@ public class HandlerPlayerGetTokenCsReq : Handler
             return;
         }
 
-        
+        // Validate the game login token before creating a player session.
         int uid;
 
         if (ConfigManager.Config.ServerOption.ServerConfig.RunDispatch ||
@@ -122,7 +122,7 @@ public class HandlerPlayerGetTokenCsReq : Handler
         if (!ResourceManager.IsLoaded)
         {
             _logger.Warn($"PlayerGetToken accepted but resource manager is not loaded. remote={connection.RemoteEndPoint} uid={uid}");
-            
+            // resource manager not loaded, return
             return;
         }
 

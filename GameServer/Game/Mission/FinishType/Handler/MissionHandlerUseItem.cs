@@ -22,7 +22,7 @@ public class MissionHandlerUseItem : MissionFinishTypeHandler
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // this type wont be used in quest
         if (arg is ItemData item)
             if (excel.ParamInt1 == item.ItemId)
                 await player.QuestManager!.AddQuestProgress(quest.QuestID, 1);

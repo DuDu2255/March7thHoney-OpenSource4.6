@@ -17,7 +17,7 @@ public class MissionHandlerHeartDialDialoguePerformanceFinish : MissionFinishTyp
             {
                 await player.MissionManager!.AddMissionProgress(info.ID, 1);
                 var curProgress = player.MissionManager!.GetMissionProgress(info.ID);
-                if (curProgress >= info.Progress) 
+                if (curProgress >= info.Progress) // finish count >= progress, finish mission
                     await player.MissionManager!.FinishSubMission(info.ID);
             }
         }
@@ -26,7 +26,7 @@ public class MissionHandlerHeartDialDialoguePerformanceFinish : MissionFinishTyp
     public override async ValueTask HandleQuestFinishType(PlayerInstance player, QuestDataExcel quest,
         FinishWayExcel excel, object? arg)
     {
-        
+        // this type wont be used in quest
         await ValueTask.CompletedTask;
     }
 }

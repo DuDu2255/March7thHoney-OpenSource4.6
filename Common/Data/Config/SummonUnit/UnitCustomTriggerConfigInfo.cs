@@ -1,9 +1,11 @@
+using MemoryPack;
 using March7thHoney.Data.Config.Task;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.SummonUnit;
 
-public class UnitCustomTriggerConfigInfo
+[MemoryPackable]
+public partial class UnitCustomTriggerConfigInfo
 {
     public string TriggerName { get; set; } = "";
     public bool DefaultEnable { get; set; }
@@ -18,13 +20,13 @@ public class UnitCustomTriggerConfigInfo
 
     public bool IsSingle { get; set; }
 
-    
+    // EntityType TargetEntityType { get; set; }
     public DynamicFloat TargetGroupID { get; set; } = new();
 
     public DynamicFloat TargetID { get; set; } = new();
 
-    
-    
+    // EntityType[] TargetTypes { get; set; }
+    // PredicateConfigInfo TargetFilter { get; set; }
     public string ColliderRelativePath { get; set; } = "";
     public bool DestroyAfterTriggered { get; set; }
     public bool DisableAfterTriggered { get; set; }

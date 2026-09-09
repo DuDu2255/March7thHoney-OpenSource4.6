@@ -9,9 +9,8 @@ using March7thHoney.GameServer.Game.Player;
 using March7thHoney.GameServer.Server.Packet.Send.Challenge;
 using March7thHoney.GameServer.Server.Packet.Send.Scene;
 using March7thHoney.Proto;
-using March7thHoney.Proto.ServerSide;
 using Google.Protobuf;
-using static March7thHoney.GameServer.Plugin.Event.PluginEvent;
+using MemoryPack;
 
 namespace March7thHoney.GameServer.Game.Challenge;
 
@@ -49,40 +48,40 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
             return;
         }
 
-        var data = new ChallengeDataPb();
+        var data = new ChallengeStateData();
         BaseLegacyChallengeInstance instance;
         if (excel.IsBoss())
         {
-            data.Boss = new ChallengeBossDataPb
+            data.Boss = new BossChallengeState
             {
                 ChallengeMazeId = (uint)excel.ID,
                 CurStatus = 1,
                 CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1
+                CurrentExtraLineup = ChallengeLineupType.Challenge1
             };
 
             instance = new ChallengeBossInstance(Player, data);
         }
         else if (excel.IsStory())
         {
-            data.Story = new ChallengeStoryDataPb
+            data.Story = new StoryChallengeState
             {
                 ChallengeMazeId = (uint)excel.ID,
                 CurStatus = 1,
                 CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1
+                CurrentExtraLineup = ChallengeLineupType.Challenge1
             };
 
             instance = new ChallengeStoryInstance(Player, data);
         }
         else
         {
-            data.Memory = new ChallengeMemoryDataPb
+            data.Memory = new MemoryChallengeState
             {
                 ChallengeMazeId = (uint)excel.ID,
                 CurStatus = 1,
                 CurrentStage = 1,
-                CurrentExtraLineup = ChallengeLineupTypePb.Challenge1,
+                CurrentExtraLineup = ChallengeLineupType.Challenge1,
                 RoundsLeft = (uint)excel.ChallengeCountDown
             };
 
@@ -118,17 +117,16 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
 
         if (excel.IsStory() && storyBuffs != null)
         {
-            instance.Data.Story.Buffs.Add(storyBuffs.BuffOne);
-            instance.Data.Story.Buffs.Add(storyBuffs.BuffTwo);
+            instance.Data.Story!.Buffs.Add(storyBuffs.BuffOne);
+            instance.Data.Story!.Buffs.Add(storyBuffs.BuffTwo);
         }
 
         if (bossBuffs != null)
         {
-            instance.Data.Boss.Buffs.Add(bossBuffs.BuffOne);
-            instance.Data.Boss.Buffs.Add(bossBuffs.BuffTwo);
+            instance.Data.Boss!.Buffs.Add(bossBuffs.BuffOne);
+            instance.Data.Boss!.Buffs.Add(bossBuffs.BuffTwo);
         }
 
-        InvokeOnPlayerEnterChallenge(Player, instance);
 
         await Player.SendPacket(new PacketStartChallengeScRsp(Player, sendScene: false));
         await Player.SendPacket(new PacketEnterSceneByServerScNotify(Player.SceneInstance!));
@@ -136,7 +134,8 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
         SaveInstance(instance);
     }
 
-    public void AddHistory(int challengeId, int stars, int score)
+    public void AddHistory(int challengeId, int stars, int score, int scoreOne = 0, int scoreTwo = 0,
+        int buffOne = 0, int buffTwo = 0, bool firstNodeWon = false, bool secondNodeWon = false)
     {
         if (stars <= 0) return;
 
@@ -144,14 +143,21 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
             ChallengeData.History[challengeId] = new ChallengeHistoryData(Player.Uid, challengeId);
         var info = ChallengeData.History[challengeId];
 
-        
+        // Set
         info.SetStars(stars);
         info.Score = score;
+        info.ScoreOne = scoreOne;
+        info.ScoreTwo = scoreTwo;
+        info.BuffOne = buffOne;
+        info.BuffTwo = buffTwo;
+        info.FirstNodeWon = firstNodeWon;
+        info.SecondNodeWon = secondNodeWon;
+        DatabaseHelper.MarkDirty(Player.Uid);
     }
 
     public async ValueTask<List<TakenChallengeRewardInfo>?> TakeRewards(int groupId)
     {
-        
+        // Get excels
         if (!GameData.ChallengeGroupData.ContainsKey(groupId)) return null;
         var challengeGroup = GameData.ChallengeGroupData[groupId];
 
@@ -163,6 +169,20 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
         {
             if (challengeExcel.GroupID != groupId) continue;
 
+            var tierceExcel = GameData.ChallengeMazeTierceConfigData.Values
+                .FirstOrDefault(x => x.PreChallengeMazeID == challengeExcel.ID);
+            if (tierceExcel != null &&
+                ChallengeData.TierceHistory.TryGetValue(tierceExcel.ID, out var tierceHistory))
+            {
+                Player.ChallengeTierceManager!.RefreshHistoryProgress(tierceExcel, tierceHistory);
+                if (tierceHistory.FinishedTargetList.Count > 0)
+                {
+                    totalStars += tierceExcel.ChallengeTargetID.Count(targetId =>
+                        tierceHistory.FinishedTargetList.Contains((uint)targetId));
+                    continue;
+                }
+            }
+
             if (ChallengeData.History.TryGetValue(challengeExcel.ID, out var ch))
             {
                 ch.GroupId = challengeExcel.GroupID;
@@ -170,29 +190,29 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
             }
         }
 
-        
+        // Rewards
         var rewardInfos = new List<TakenChallengeRewardInfo>();
         var data = new List<ItemData>();
 
-        
+        // Get challenge rewards
         foreach (var challengeReward in challengeRewardLine)
         {
-            
+            // Check if we have enough stars to take this reward
             if (totalStars < challengeReward.StarCount) continue;
 
-            
+            // Get reward info
             if (!ChallengeData.TakenRewards.ContainsKey(groupId))
                 ChallengeData.TakenRewards[groupId] = new ChallengeGroupReward(Player.Uid, groupId);
             var reward = ChallengeData.TakenRewards[groupId];
 
-            
+            // Check if reward has been taken
             if (reward.HasTakenReward(challengeReward.StarCount)) continue;
 
-            
+            // Get reward excel
             if (!GameData.RewardDataData.ContainsKey(challengeReward.RewardID)) continue;
             var rewardExcel = GameData.RewardDataData[challengeReward.RewardID];
 
-            
+            // Add rewards
             var proto = new TakenChallengeRewardInfo
             {
                 StarCount = (uint)challengeReward.StarCount,
@@ -218,40 +238,97 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                 data.Add(itemData);
             }
 
-            
+            // Set reward as taken only after reward payload is built successfully.
             reward.SetTakenReward(challengeReward.StarCount);
             rewardInfos.Add(proto);
         }
 
-        
+        // Add items to inventory
         await Player.InventoryManager!.AddItems(data);
+        if (rewardInfos.Count > 0) DatabaseHelper.MarkDirty(Player.Uid);
         return rewardInfos;
+    }
+
+    public async ValueTask<ItemList?> TakeTierceReward(int groupId)
+    {
+        var tierceExcel = GameData.ChallengeMazeTierceConfigData.Values.FirstOrDefault(tierce =>
+            GameData.ChallengeConfigData.TryGetValue(tierce.PreChallengeMazeID, out var preChallenge) &&
+            preChallenge.GroupID == groupId);
+        if (tierceExcel == null || tierceExcel.ChallengeTierceTargetID == 0) return null;
+
+        if (!ChallengeData.TierceHistory.TryGetValue(tierceExcel.ID, out var history) ||
+            !history.IsPassed ||
+            !history.FinishedTargetList.Contains((uint)tierceExcel.ChallengeTierceTargetID))
+            return null;
+
+        if (!ChallengeData.TakenRewards.TryGetValue(groupId, out var takenRewards))
+        {
+            takenRewards = new ChallengeGroupReward(Player.Uid, groupId);
+            ChallengeData.TakenRewards[groupId] = takenRewards;
+        }
+
+        if (takenRewards.HasTakenReward(0) ||
+            !GameData.RewardDataData.TryGetValue(tierceExcel.RewardID, out var rewardExcel))
+            return null;
+
+        var reward = new ItemList();
+        var items = new List<ItemData>();
+        if (rewardExcel.Hcoin > 0)
+        {
+            var item = new ItemData { ItemId = 1, Count = rewardExcel.Hcoin };
+            reward.ItemList_.Add(item.ToProto());
+            items.Add(item);
+        }
+
+        foreach (var (itemId, count) in rewardExcel.GetItems())
+        {
+            var item = new ItemData { ItemId = itemId, Count = count };
+            reward.ItemList_.Add(item.ToProto());
+            items.Add(item);
+        }
+
+        takenRewards.SetTakenReward(0);
+        await Player.InventoryManager!.AddItems(items);
+        DatabaseHelper.MarkDirty(Player.Uid);
+        return reward;
     }
 
     public void SaveInstance(BaseChallengeInstance instance)
     {
-        ChallengeData.ChallengeInstance = Convert.ToBase64String(instance.Data.ToByteArray());
+        ChallengeData.ChallengeInstance = Convert.ToBase64String(MemoryPackSerializer.Serialize(instance.Data));
+        DatabaseHelper.MarkDirty(Player.Uid);
     }
 
     public void ClearInstance()
     {
         ChallengeData.ChallengeInstance = null;
         ChallengeInstance = null;
+        DatabaseHelper.MarkDirty(Player.Uid);
     }
 
     public void ResurrectInstance()
     {
         if (ChallengeData.ChallengeInstance == null) return;
-        var protoByte = Convert.FromBase64String(ChallengeData.ChallengeInstance);
-        var proto = ChallengeDataPb.Parser.ParseFrom(protoByte);
+
+        ChallengeStateData? proto = null;
+        try
+        {
+            var bytes = Convert.FromBase64String(ChallengeData.ChallengeInstance);
+            proto = MemoryPackSerializer.Deserialize<ChallengeStateData>(bytes);
+        }
+        catch
+        {
+            // Incompatible/legacy blob — drop it rather than crash the player's challenge manager.
+            proto = null;
+        }
 
         if (proto != null)
-            ChallengeInstance = proto.ChallengeTypeCase switch
+            ChallengeInstance = proto.Case switch
             {
-                ChallengeDataPb.ChallengeTypeOneofCase.Memory => new ChallengeMemoryInstance(Player, proto),
-                ChallengeDataPb.ChallengeTypeOneofCase.Peak => null,
-                ChallengeDataPb.ChallengeTypeOneofCase.Story => new ChallengeStoryInstance(Player, proto),
-                ChallengeDataPb.ChallengeTypeOneofCase.Boss => new ChallengeBossInstance(Player, proto),
+                ChallengeStateCase.Memory => new ChallengeMemoryInstance(Player, proto),
+                ChallengeStateCase.Peak => new ChallengePeakInstance(Player, proto),
+                ChallengeStateCase.Story => new ChallengeStoryInstance(Player, proto),
+                ChallengeStateCase.Boss => new ChallengeBossInstance(Player, proto),
                 _ => null
             };
         else
@@ -274,17 +351,18 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                 stats.MemoryGroupStatistics ??= [];
 
                 var starCount = 0u;
-                for (var i = 0; i < 3; i++) starCount += (memory.Data.Memory.Stars & (1 << i)) != 0 ? 1u : 0u;
+                for (var i = 0; i < 3; i++) starCount += (memory.Data.Memory!.Stars & (1 << i)) != 0 ? 1u : 0u;
 
-                if (stats.MemoryGroupStatistics.GetValueOrDefault((uint)memory.Config.ID)?.Stars >
-                    starCount) return; 
+                var oldMemory = stats.MemoryGroupStatistics.GetValueOrDefault((uint)memory.Config.ID);
+                var roundCount = (uint)(memory.Config.ChallengeCountDown - memory.Data.Memory!.RoundsLeft);
+                if (oldMemory?.Stars > starCount) return;
 
 
                 var pb = new MemoryGroupStatisticsPb
                 {
-                    RoundCount = (uint)(memory.Config.ChallengeCountDown - memory.Data.Memory.RoundsLeft),
+                    RoundCount = roundCount,
                     Stars = starCount,
-                    RecordId = Player.FriendRecordData!.NextRecordId++,
+                    RecordId = Player.FriendRecordData!.AllocateChallengeRecordId(),
                     Level = memory.Config.Floor
                 };
 
@@ -314,7 +392,8 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                             Index = index++,
                             Id = (uint)formalAvatar.BaseAvatarId,
                             AvatarType = AvatarType.AvatarFormalType,
-                            Level = (uint)formalAvatar.Level
+                            Level = (uint)formalAvatar.Level,
+                            SkinId = (uint)formalAvatar.GetCurPathInfo().Skin
                         });
                     }
 
@@ -336,19 +415,20 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                 stats.StoryGroupStatistics ??= [];
 
                 var starCount = 0u;
-                for (var i = 0; i < 3; i++) starCount += (story.Data.Story.Stars & (1 << i)) != 0 ? 1u : 0u;
+                for (var i = 0; i < 3; i++) starCount += (story.Data.Story!.Stars & (1 << i)) != 0 ? 1u : 0u;
 
-                if (stats.StoryGroupStatistics.GetValueOrDefault((uint)story.Config.ID)?.Stars >
-                    starCount) return; 
+                var oldStory = stats.StoryGroupStatistics.GetValueOrDefault((uint)story.Config.ID);
+                var score = (uint)story.GetTotalScore();
+                if (oldStory?.Stars > starCount) return;
 
                 var pb = new StoryGroupStatisticsPb
                 {
                     Stars = starCount,
-                    RecordId = Player.FriendRecordData!.NextRecordId++,
+                    RecordId = Player.FriendRecordData!.AllocateChallengeRecordId(),
                     Level = story.Config.Floor,
-                    BuffOne = story.Data.Story.Buffs.Count > 0 ? story.Data.Story.Buffs[0] : 0,
-                    BuffTwo = story.Data.Story.Buffs.Count > 1 ? story.Data.Story.Buffs[1] : 0,
-                    Score = (uint)story.GetTotalScore()
+                    BuffOne = story.Data.Story!.Buffs.Count > 0 ? story.Data.Story!.Buffs[0] : 0,
+                    BuffTwo = story.Data.Story!.Buffs.Count > 1 ? story.Data.Story!.Buffs[1] : 0,
+                    Score = score
                 };
 
                 List<ExtraLineupType> lineupTypes =
@@ -377,7 +457,8 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                             Index = index++,
                             Id = (uint)formalAvatar.BaseAvatarId,
                             AvatarType = AvatarType.AvatarFormalType,
-                            Level = (uint)formalAvatar.Level
+                            Level = (uint)formalAvatar.Level,
+                            SkinId = (uint)formalAvatar.GetCurPathInfo().Skin
                         });
                     }
 
@@ -399,19 +480,20 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                 stats.BossGroupStatistics ??= [];
 
                 var starCount = 0u;
-                for (var i = 0; i < 3; i++) starCount += (boss.Data.Boss.Stars & (1 << i)) != 0 ? 1u : 0u;
+                for (var i = 0; i < 3; i++) starCount += (boss.Data.Boss!.Stars & (1 << i)) != 0 ? 1u : 0u;
 
-                if (stats.BossGroupStatistics.GetValueOrDefault((uint)boss.Config.ID)?.Stars >
-                    starCount) return; 
+                var oldBoss = stats.BossGroupStatistics.GetValueOrDefault((uint)boss.Config.ID);
+                var score = (uint)boss.GetTotalScore();
+                if (oldBoss?.Stars > starCount) return;
 
                 var pb = new BossGroupStatisticsPb
                 {
                     Stars = starCount,
-                    RecordId = Player.FriendRecordData!.NextRecordId++,
+                    RecordId = Player.FriendRecordData!.AllocateChallengeRecordId(),
                     Level = boss.Config.Floor,
-                    BuffOne = boss.Data.Boss.Buffs.Count > 0 ? boss.Data.Boss.Buffs[0] : 0,
-                    BuffTwo = boss.Data.Boss.Buffs.Count > 1 ? boss.Data.Boss.Buffs[1] : 0,
-                    Score = (uint)boss.GetTotalScore()
+                    BuffOne = boss.Data.Boss!.Buffs.Count > 0 ? boss.Data.Boss!.Buffs[0] : 0,
+                    BuffTwo = boss.Data.Boss!.Buffs.Count > 1 ? boss.Data.Boss!.Buffs[1] : 0,
+                    Score = score
                 };
 
                 List<ExtraLineupType> lineupTypes =
@@ -440,7 +522,8 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
                             Index = index++,
                             Id = (uint)formalAvatar.BaseAvatarId,
                             AvatarType = AvatarType.AvatarFormalType,
-                            Level = (uint)formalAvatar.Level
+                            Level = (uint)formalAvatar.Level,
+                            SkinId = (uint)formalAvatar.GetCurPathInfo().Skin
                         });
                     }
 
@@ -490,4 +573,4 @@ public class ChallengeManager(PlayerInstance player) : BasePlayerManager(player)
     #endregion
 }
 
-
+// WatchAndyTW was here

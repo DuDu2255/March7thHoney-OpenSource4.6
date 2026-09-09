@@ -20,7 +20,7 @@ public class SceneBuff(int buffId, int buffLevel, int owner, int duration = -1)
     public bool IsExpired()
     {
         if (Duration < 0)
-            return false; 
+            return false; // Permanent buff
         return Extensions.GetUnixMs() - CreatedTime >= Duration * 1000;
     }
 

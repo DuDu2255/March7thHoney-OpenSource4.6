@@ -5,19 +5,17 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Pet;
 
 [Opcode(CmdIds.SummonPetCsReq)]
-public class HandlerSummonPetCsReq : Handler
+public class HandlerSummonPetCsReq : Handler<SummonPetCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SummonPetCsReq req)
     {
-        var req = SummonPetCsReq.Parser.ParseFrom(data);
-
-        var curPetId = connection.Player!.Data.Pet;
-        if (curPetId != req.SummonedPetId && curPetId != 0)
+        var curPetId = player.Data.Pet;
+        if (curPetId != req.SummonedPetId)
             await connection.SendPacket(new PacketCurPetChangedScNotify(req.SummonedPetId));
 
-        connection.Player!.Data.Pet = (int)req.SummonedPetId;
+        player.Data.Pet = (int)req.SummonedPetId;
 
         await connection.SendPacket(new PacketSummonPetScRsp(curPetId, req.SummonedPetId));
-        await connection.Player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
+        await player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
     }
 }

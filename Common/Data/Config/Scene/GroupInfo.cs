@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Data.Config.Task;
 using March7thHoney.Database.Quests;
 using March7thHoney.Enums;
@@ -10,7 +11,8 @@ using Newtonsoft.Json.Converters;
 
 namespace March7thHoney.Data.Config.Scene;
 
-public class GroupInfo
+[MemoryPackable]
+public partial class GroupInfo
 {
     public int Id;
 
@@ -39,7 +41,9 @@ public class GroupInfo
     public List<PropInfo> PropList { get; set; } = [];
     public List<NpcInfo> NPCList { get; set; } = [];
     public Dictionary<int, GroupPropertyConfigInfo> GroupPropertyMap { get; set; } = [];
-    public ValueSourceInfo? ValueSource { get; set; }
+
+    // Raw JSON consumed at load time by Load(); not cached (JObject isn't MemoryPack-serializable).
+    [MemoryPackIgnore] public ValueSourceInfo? ValueSource { get; set; }
 
     [JsonIgnore] public LevelGraphConfigInfo? LevelGraphConfig { get; set; }
 
@@ -76,14 +80,15 @@ public class GroupInfo
         foreach (var info in AtmosphereCondition.Conditions)
             if (info.TryGetValue("SubMissionID", out var value) && value is long v)
             {
-                
+                // try cast to int
                 var missionId = (int)v;
                 RelatedMissionId.Add(missionId);
             }
     }
 }
 
-public class AtmosphereCondition
+[MemoryPackable]
+public partial class AtmosphereCondition
 {
     public List<Dictionary<string, object>> Conditions { get; set; } = [];
 
@@ -91,25 +96,33 @@ public class AtmosphereCondition
     public OperationEnum Operation { get; set; } = OperationEnum.And;
 }
 
-public class LoadCondition
+[MemoryPackable]
+public partial class LoadCondition
 {
     public List<Condition> Conditions { get; set; } = [];
 
     [JsonConverter(typeof(StringEnumConverter))]
     public OperationEnum Operation { get; set; } = OperationEnum.And;
 
+    /// <summary>
+    ///     Official deferral marker on an unload condition: once it turns true the group must stay in the
+    ///     scene the player is currently in and only disappear on the next level load. Ignored for load
+    ///     conditions (a load is always evaluated at build time anyway).
+    /// </summary>
+    public bool DelayToLevelReload { get; set; }
+
     public bool IsTrue(MissionData mission, bool defaultResult = true)
     {
         if (Conditions.Count == 0) return defaultResult;
 
-        
+        // check load condition
         List<Func<bool>> conditionChecks = [];
 
         foreach (var condition in Conditions)
             if (condition.Type == LevelGroupMissionTypeEnum.MainMission)
             {
                 var status = mission.GetMainMissionStatus(condition.ID);
-                if (!ConfigManager.Config.ServerOption.EnableMission) status = MissionPhaseEnum.Finish;
+                if (!mission.MissionEnabled) status = MissionPhaseEnum.Finish;
 
                 condition.Phase = condition.Phase == MissionPhaseEnum.Cancel
                     ? MissionPhaseEnum.Finish
@@ -125,9 +138,9 @@ public class LoadCondition
             }
             else
             {
-                
+                // sub mission
                 var status = mission.GetSubMissionStatus(condition.ID);
-                if (!ConfigManager.Config.ServerOption.EnableMission) status = MissionPhaseEnum.Finish;
+                if (!mission.MissionEnabled) status = MissionPhaseEnum.Finish;
                 condition.Phase = condition.Phase == MissionPhaseEnum.Cancel
                     ? MissionPhaseEnum.Finish
                     : condition.Phase;
@@ -151,7 +164,8 @@ public class LoadCondition
     }
 }
 
-public class SavedValueLoadCondition
+[MemoryPackable]
+public partial class SavedValueLoadCondition
 {
     public List<SavedValueCondition> Conditions { get; set; } = [];
 
@@ -162,11 +176,11 @@ public class SavedValueLoadCondition
     {
         if (Conditions.Count == 0) return defaultResult;
 
-        
+        // check load condition
         List<Func<bool>> conditionChecks = [];
         foreach (var condition in Conditions)
         {
-            
+            // saved value
             var status = savedValue.GetValueOrDefault(condition.SavedValueName, 0);
             if (condition.Operation == CompareTypeEnum.Unknow) continue;
 
@@ -192,7 +206,8 @@ public class SavedValueLoadCondition
     }
 }
 
-public class Condition
+[MemoryPackable]
+public partial class Condition
 {
     [JsonConverter(typeof(StringEnumConverter))]
     public LevelGroupMissionTypeEnum Type { get; set; } = LevelGroupMissionTypeEnum.MainMission;
@@ -203,7 +218,8 @@ public class Condition
     public MissionPhaseEnum Phase { get; set; } = MissionPhaseEnum.Accept;
 }
 
-public class SavedValueCondition
+[MemoryPackable]
+public partial class SavedValueCondition
 {
     public string SavedValueName { get; set; } = "";
 
@@ -213,7 +229,8 @@ public class SavedValueCondition
     public CompareTypeEnum Operation { get; set; } = CompareTypeEnum.Unknow;
 }
 
-public class LevelGroupSystemUnlockCondition
+[MemoryPackable]
+public partial class LevelGroupSystemUnlockCondition
 {
     public List<int> Conditions { get; set; } = [];
 
@@ -221,7 +238,8 @@ public class LevelGroupSystemUnlockCondition
     public OperationEnum Operation { get; set; }
 }
 
-public class GroupPropertyConfigInfo
+[MemoryPackable]
+public partial class GroupPropertyConfigInfo
 {
     public int ID { get; set; }
     public string Name { get; set; } = "";

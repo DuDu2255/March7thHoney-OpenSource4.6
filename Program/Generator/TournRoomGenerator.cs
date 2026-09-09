@@ -20,21 +20,21 @@ public static class TournRoomGenerator
         { RogueTournRoomTypeEnum.Event, [620500000, 320500000, 1120500000] },
         { RogueTournRoomTypeEnum.Encounter, [420400000, 120400000, 0] },
         { RogueTournRoomTypeEnum.Reward, [420800000, 120800000, 0] },
-        { RogueTournRoomTypeEnum.Coin, [620600000, 0, 0] }  
+        { RogueTournRoomTypeEnum.Coin, [620600000, 0, 0] }  // 20
     };
 
     public static Dictionary<RogueTournRoomTypeEnum, List<int>> RoomFloorDiffPrefix { get; set; } = new()
     {
         { RogueTournRoomTypeEnum.Boss, [320100000, 320100000, 220100000, 220100000] },
-        { RogueTournRoomTypeEnum.Respite, [321000000, 321000000, 221000000, 221000000] },  
+        { RogueTournRoomTypeEnum.Respite, [321000000, 321000000, 221000000, 221000000] },  // 20
         { RogueTournRoomTypeEnum.Elite, [320200000, 320200000, 220200000, 220200000] },
-        { RogueTournRoomTypeEnum.Shop, [320700000, 320700000, 220700000, 220700000] }  
+        { RogueTournRoomTypeEnum.Shop, [320700000, 320700000, 220700000, 220700000] }  // 20
     };
 
     #endregion
     public static void GenerateFile(string path)
     {
-        
+        // get floor info
         foreach (var floorId in AllowedFloorIdList)
         {
             var areaGroupId = 0;
@@ -93,7 +93,7 @@ public static class TournRoomGenerator
 
                 if (isCommon)
                 {
-                    
+                    // contain Battle Event Coin
                     if (groupInfo.Name.Contains("Monster"))
                     {
                         contentGroupId.TryAdd(RogueTournRoomTypeEnum.Battle, []);
@@ -118,15 +118,15 @@ public static class TournRoomGenerator
             }
         }
 
-        
+        // clear old file
         if (File.Exists(path))
             File.WriteAllText(path, "", Encoding.UTF8);
 
-        
+        // save
         File.AppendAllText(path, JsonConvert.SerializeObject(SavedRoomInstanceList, Formatting.Indented),
             Encoding.UTF8);
 
-        
+        // log
         Logger.GetByClassName().Info($"Generated in {path} Successfully!");
     }
 
@@ -154,7 +154,7 @@ public static class TournRoomGenerator
             DefaultLoadGroup = contentGroupIds,
             EntranceId = entranceId,
             RoomType = type,
-            
+            //RoomId = (uint)roomId
         });
     }
 }

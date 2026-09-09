@@ -8,15 +8,13 @@ using March7thHoney.Proto;
 
 namespace March7thHoney.GameServer.Game.Inventory;
 
-public class OfferingManager(PlayerInstance player) : BasePlayerManager(player)
+public class OfferingManager(PlayerInstance player) : BasePlayerManager<OfferingData>(player)
 {
-    public OfferingData Data = DatabaseHelper.Instance!.GetInstanceOrCreateNew<OfferingData>(player.Uid);
-
     public OfferingTypeData? GetOfferingData(int offeringId)
     {
         if (Data.Offerings.TryGetValue(offeringId, out var offeringData)) return offeringData;
 
-        var gameData = GameData.OfferingTypeConfigData.GetValueOrDefault(offeringId); 
+        var gameData = GameData.OfferingTypeConfigData.GetValueOrDefault(offeringId); // create a new one
         if (gameData == null) return null;
 
         var unlockId = gameData.UnlockID;
@@ -38,7 +36,7 @@ public class OfferingManager(PlayerInstance player) : BasePlayerManager(player)
         List<OfferingTypeData> syncData = [];
         foreach (var offering in Data.Offerings.Values)
         {
-            var gameData = GameData.OfferingTypeConfigData.GetValueOrDefault(offering.OfferingId); 
+            var gameData = GameData.OfferingTypeConfigData.GetValueOrDefault(offering.OfferingId); // create a new one
             if (gameData == null) continue;
 
             if (Player.QuestManager!.UnlockHandler.GetUnlockStatus(gameData.UnlockID) &&

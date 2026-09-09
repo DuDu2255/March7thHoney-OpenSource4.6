@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-2ea44f" alt="Platform" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-2ea44f" alt="Platform" />
   <img src="https://img.shields.io/badge/Status-Active%20Development-f39c12" alt="Status" />
   <img src="https://img.shields.io/badge/License-GPLv3-blue" alt="License" />
 </p>
@@ -71,7 +71,7 @@ March7thHoneyは、.NET 10をベースとしたサーバープロジェクトで
 
 - .NET SDK 10
 - Git
-- Windows または Linux（`x64` / `arm64`）
+- Windows、Linux または macOS（`x64` / `arm64`）
 
 ## クイックスタート
 
@@ -98,6 +98,13 @@ dotnet build program/program.csproj -c Release
 | `linux-x64` | `March7thHoney-linux-x64` |
 | `linux-arm64` | `March7thHoney-linux-arm64` |
 
+<details>
+<summary>手動公開メモ</summary>
+
+- Actions のストレージ逼迫時は手動実行時のみ成果物アップロードを推奨。
+- 容量超過時は過去成果物の削除、または再計算待ちが必要です。
+
+</details>
 
 ## 補足
 

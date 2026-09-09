@@ -5,15 +5,13 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Phone;
 
 [Opcode(CmdIds.SetPersonalCardCsReq)]
-public class HandlerSetPersonalCardCsReq : Handler
+public class HandlerSetPersonalCardCsReq : Handler<SetPersonalCardCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetPersonalCardCsReq req)
     {
-        var req = SetPersonalCardCsReq.Parser.ParseFrom(data);
-
-        connection.Player!.Data.PersonalCard = (int)req.Id;
+        player.Data.PersonalCard = (int)req.Id;
 
         await connection.SendPacket(new PacketSetPersonalCardScRsp(req.Id));
-        await connection.Player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
+        await player.TrainCakeCatchManager!.BroadcastPlayerStateAsync();
     }
 }

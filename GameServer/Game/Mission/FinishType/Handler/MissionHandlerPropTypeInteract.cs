@@ -11,7 +11,7 @@ public class MissionHandlerPropTypeInteract : MissionFinishTypeHandler
 {
     public override async ValueTask HandleMissionFinishType(PlayerInstance player, SubMissionInfo info, object? arg)
     {
-        
+        // this type wont be used in mission
         await ValueTask.CompletedTask;
     }
 
@@ -22,7 +22,7 @@ public class MissionHandlerPropTypeInteract : MissionFinishTypeHandler
         foreach (var floor in player.SceneData?.ScenePropData ?? [])
         foreach (var group in floor.Value)
         foreach (var prop in group.Value)
-            if (prop.State == (PropStateEnum)excel.ParamInt2) 
+            if (prop.State == (PropStateEnum)excel.ParamInt2) // interacted
                 propCount++;
 
         await player.QuestManager!.UpdateQuestProgress(quest.QuestID, propCount);

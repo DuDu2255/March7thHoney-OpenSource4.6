@@ -82,9 +82,9 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
 
     public async ValueTask EnterStoryLine(int storyLineId, bool tp = true)
     {
-        if (StoryLineData.CurStoryLineId == storyLineId) return; 
+        if (StoryLineData.CurStoryLineId == storyLineId) return; // already in this story line
 
-        if (storyLineId == 0) 
+        if (storyLineId == 0) // leave story line
         {
             await LeaveStoryLine(tp);
             return;
@@ -93,7 +93,7 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
         StoryLineData.RunningStoryLines.TryGetValue(storyLineId, out var lineInfo);
         if (lineInfo == null) return;
 
-        if (StoryLineData.CurStoryLineId == 0) 
+        if (StoryLineData.CurStoryLineId == 0) // not in any story line
         {
             StoryLineData.OldEntryId = Player.Data.EntryId;
             StoryLineData.OldFloorId = Player.Data.FloorId;
@@ -101,7 +101,7 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
             StoryLineData.OldPos = Player.Data.Pos!;
             StoryLineData.OldRot = Player.Data.Rot!;
         }
-        else 
+        else // in another story line
         {
             await LeaveStoryLine(false);
         }
@@ -138,10 +138,10 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
             StoryLineId = storyExcel.StoryLineID
         };
 
-        
+        // reset
         Player.LineupManager!.SetExtraLineup(ExtraLineupType.LineupNone, []);
 
-        
+        // save
         StoryLineData.RunningStoryLines[storyExcel.StoryLineID] = record;
         StoryLineData.CurStoryLineId = 0;
 
@@ -164,7 +164,7 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
     }
 
     public async ValueTask
-        CheckIfFinishStoryLine() 
+        CheckIfFinishStoryLine() // seems like a story line end with another ChangeStoryLine finish action that Params[0] = 0
     {
         if (StoryLineData.CurStoryLineId == 0) return;
         GameData.StoryLineData.TryGetValue(StoryLineData.CurStoryLineId, out var storyExcel);
@@ -181,8 +181,13 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
         GameData.StoryLineData.TryGetValue(StoryLineData.CurStoryLineId, out var storyExcel);
         if (storyExcel == null) return;
         Player.LineupManager!.SetExtraLineup(ExtraLineupType.LineupNone, []);
+        var oldPlaneId = StoryLineData.OldPlaneId;
+        var oldFloorId = StoryLineData.OldFloorId;
+        var oldEntryId = StoryLineData.OldEntryId;
+        var oldPos = StoryLineData.OldPos;
+        var oldRot = StoryLineData.OldRot;
 
-        
+        // delete old & reset
         if (Player.MissionManager!.GetSubMissionStatus(storyExcel.EndCondition.Param) == MissionPhaseEnum.Finish)
             StoryLineData.RunningStoryLines.Remove(StoryLineData.CurStoryLineId);
         else
@@ -213,8 +218,7 @@ public class StoryLineManager(PlayerInstance player) : BasePlayerManager(player)
             if (entryId > 0)
                 await Player.EnterSceneByEntranceId(entryId, anchorGroupId, anchorId, true);
             else
-                await Player.LoadScene(StoryLineData.OldPlaneId, StoryLineData.OldFloorId, StoryLineData.OldEntryId,
-                    StoryLineData.OldPos, StoryLineData.OldRot, true);
+                await Player.LoadScene(oldPlaneId, oldFloorId, oldEntryId, oldPos, oldRot, true);
         }
     }
 

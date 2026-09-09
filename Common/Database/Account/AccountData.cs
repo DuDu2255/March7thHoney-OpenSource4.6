@@ -1,48 +1,47 @@
+using MemoryPack;
 using March7thHoney.Command;
 using March7thHoney.Util;
 using March7thHoney.Util.Security;
-using SqlSugar;
 
 namespace March7thHoney.Database.Account;
 
-[SugarTable("Account")]
+[DbTable("Account")]
 public class AccountData : BaseDatabaseDataHelper
 {
     public string? Username { get; set; }
-    [SugarColumn(IsNullable = true)] public string? Email { get; set; }
-    [SugarColumn(IsNullable = true)] public string? NormalizedEmail { get; set; }
-    [SugarColumn(IsNullable = true)] public bool IsEmailVerified { get; set; }
-    [SugarColumn(IsNullable = true)] public long EmailVerifiedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? EmailVerificationTokenHash { get; set; }
-    [SugarColumn(IsNullable = true)] public long EmailVerificationTokenExpireAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? PasswordResetTokenHash { get; set; }
-    [SugarColumn(IsNullable = true)] public long PasswordResetTokenExpireAt { get; set; }
+    public string? Email { get; set; }
+    public string? NormalizedEmail { get; set; }
+    public bool IsEmailVerified { get; set; }
+    public long EmailVerifiedAt { get; set; }
+    public string? EmailVerificationTokenHash { get; set; }
+    public long EmailVerificationTokenExpireAt { get; set; }
+    public string? PasswordResetTokenHash { get; set; }
+    public long PasswordResetTokenExpireAt { get; set; }
 
-    [SugarColumn(IsNullable = true)] public string? PasswordSalt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? PasswordHash { get; set; }
+    public string? PasswordSalt { get; set; }
+    public string? PasswordHash { get; set; }
     public int PasswordIterations { get; set; }
 
-    [SugarColumn(IsNullable = true)] public string? ComboToken { get; set; }
+    public string? ComboToken { get; set; }
+    public string? ComboTokenHash { get; set; }
     public long ComboTokenExpireAt { get; set; }
 
-    [SugarColumn(IsNullable = true)] public string? DispatchToken { get; set; }
+    public string? DispatchToken { get; set; }
+    public string? DispatchTokenHash { get; set; }
     public long DispatchTokenExpireAt { get; set; }
 
-    [SugarColumn(IsNullable = true)]
     public string? Role { get; set; }
 
-    [SugarColumn(IsNullable = true)]
-    public string? Permissions { get; set; } 
+    public string? Permissions { get; set; } // type: permission1,permission2,permission3...
 
-    [SugarColumn(IsNullable = true)]
     public string? PermissionOverrides { get; set; }
 
-    [SugarColumn(IsNullable = true)] public bool IsBanned { get; set; }
-    [SugarColumn(IsNullable = true)] public string? BanReason { get; set; }
-    [SugarColumn(IsNullable = true)] public long BanExpireAt { get; set; }
-    [SugarColumn(IsNullable = true)] public long BanCreatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public long BanUpdatedAt { get; set; }
-    [SugarColumn(IsNullable = true)] public string? KnownIdentityKeys { get; set; }
+    public bool IsBanned { get; set; }
+    public string? BanReason { get; set; }
+    public long BanExpireAt { get; set; }
+    public long BanCreatedAt { get; set; }
+    public long BanUpdatedAt { get; set; }
+    public string? KnownIdentityKeys { get; set; }
 
     public static AccountData? GetAccountByUserName(string username)
     {
@@ -319,38 +318,44 @@ public class AccountData : BaseDatabaseDataHelper
     public void ClearLoginTokens(bool persist = true)
     {
         DispatchToken = null;
+        DispatchTokenHash = null;
         DispatchTokenExpireAt = 0;
         ComboToken = null;
+        ComboTokenHash = null;
         ComboTokenExpireAt = 0;
         if (persist) PersistAuthState();
     }
 
     public string GenerateDispatchToken()
     {
-        DispatchToken = AuthSecurity.GenerateSessionToken();
+        var token = AuthSecurity.GenerateSessionToken();
+        DispatchToken = null;
+        DispatchTokenHash = AuthSecurity.HashToken(token);
         DispatchTokenExpireAt = Extensions.GetUnixSec() +
                                 Math.Max(ConfigManager.Config.ServerOption.Auth.DispatchTokenExpireMinutes, 1) * 60L;
         PersistAuthState();
-        return DispatchToken;
+        return token;
     }
 
     public string GenerateComboToken()
     {
-        ComboToken = AuthSecurity.GenerateSessionToken();
+        var token = AuthSecurity.GenerateSessionToken();
+        ComboToken = null;
+        ComboTokenHash = AuthSecurity.HashToken(token);
         ComboTokenExpireAt = Extensions.GetUnixSec() +
                              Math.Max(ConfigManager.Config.ServerOption.Auth.ComboTokenExpireMinutes, 1) * 60L;
         PersistAuthState();
-        return ComboToken;
+        return token;
     }
 
     public bool ValidateDispatchToken(string? token)
     {
-        return ValidateToken(token, DispatchToken, DispatchTokenExpireAt);
+        return ValidateLoginToken(token, isDispatchToken: true);
     }
 
     public bool ValidateComboToken(string? token)
     {
-        return ValidateToken(token, ComboToken, ComboTokenExpireAt);
+        return ValidateLoginToken(token, isDispatchToken: false);
     }
 
     public bool ValidateGameToken(string? token)
@@ -358,16 +363,56 @@ public class AccountData : BaseDatabaseDataHelper
         return ValidateDispatchToken(token) || ValidateComboToken(token);
     }
 
-    private static bool ValidateToken(string? providedToken, string? storedToken, long expireAt)
+    private bool ValidateLoginToken(string? providedToken, bool isDispatchToken)
     {
+        var storedTokenHash = isDispatchToken ? DispatchTokenHash : ComboTokenHash;
+        var storedToken = isDispatchToken ? DispatchToken : ComboToken;
+        var expireAt = isDispatchToken ? DispatchTokenExpireAt : ComboTokenExpireAt;
         if (string.IsNullOrWhiteSpace(providedToken) ||
-            string.IsNullOrWhiteSpace(storedToken) ||
             expireAt <= Extensions.GetUnixSec())
         {
             return false;
         }
 
-        return string.Equals(storedToken, providedToken, StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(storedTokenHash))
+        {
+            var valid = AuthSecurity.VerifyToken(providedToken, storedTokenHash);
+            if (valid && !string.IsNullOrWhiteSpace(storedToken))
+            {
+                ClearLegacyLoginToken(isDispatchToken);
+                PersistAuthState();
+            }
+
+            return valid;
+        }
+
+        if (string.IsNullOrWhiteSpace(storedToken) ||
+            !string.Equals(storedToken, providedToken, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (isDispatchToken)
+        {
+            DispatchTokenHash = AuthSecurity.HashToken(providedToken);
+            DispatchToken = null;
+        }
+        else
+        {
+            ComboTokenHash = AuthSecurity.HashToken(providedToken);
+            ComboToken = null;
+        }
+
+        PersistAuthState();
+        return true;
+    }
+
+    private void ClearLegacyLoginToken(bool isDispatchToken)
+    {
+        if (isDispatchToken)
+            DispatchToken = null;
+        else
+            ComboToken = null;
     }
 
     private static bool ValidateActionToken(string? providedToken, string? storedTokenHash, long expireAt)
@@ -384,7 +429,7 @@ public class AccountData : BaseDatabaseDataHelper
 
     private void PersistAuthState()
     {
-        DatabaseHelper.ToSaveUidList.SafeAdd(Uid);
+        DatabaseHelper.MarkDirty(Uid);
         DatabaseHelper.SaveDatabaseType(this);
     }
 }

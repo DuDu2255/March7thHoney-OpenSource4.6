@@ -1,9 +1,9 @@
 namespace March7thHoney.Enums.Rogue;
 
-
+// Original class: RogueDLCBlockType
 public enum RogueDLCBlockTypeEnum
 {
-    
+    // Fields
     Empty = 1,
     Respite = 2,
     MonsterNormal = 3,

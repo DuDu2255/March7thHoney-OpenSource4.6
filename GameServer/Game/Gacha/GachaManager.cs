@@ -11,23 +11,34 @@ using GachaInfo = March7thHoney.Database.Gacha.GachaInfo;
 
 namespace March7thHoney.GameServer.Game.Gacha;
 
-public class GachaManager : BasePlayerManager
+public class GachaManager : BasePlayerManager<GachaData>
 {
+    private const int NewbieGachaLimit = 50;
+    private const int NewbieTenPullCost = 8;
+    private const int CelestialInvitationPoolSize = 7;
+
+    private static readonly HashSet<int> KnownBattlePassLightCones =
+    [
+        21028, 21029, 21030, 21031, 21032, 21033, 21034,
+        21052, 21053, 21055, 21056, 21057, 21058, 21060, 21061, 21062, 21065
+    ];
+
     public GachaManager(PlayerInstance player) : base(player)
     {
-        GachaData = DatabaseHelper.Instance!.GetInstanceOrCreateNew<GachaData>(player.Uid);
+        Data.EnsurePityStateMigrated();
 
-        if (GachaData.GachaHistory.Count >= 50)
-            GachaData.GachaHistory.RemoveRange(0, GachaData.GachaHistory.Count - 50);
+        if (Data.GachaHistory.Count >= 50)
+            Data.GachaHistory.RemoveRange(0, Data.GachaHistory.Count - 50);
 
         foreach (var order in GameData.DecideAvatarOrderData.Values.ToList().OrderBy(x => -x.Order))
         {
-            if (GachaData.GachaDecideOrder.Contains(order.ItemID)) continue;
-            GachaData.GachaDecideOrder.Add(order.ItemID);
+            if (Data.GachaDecideOrder.Contains(order.ItemID)) continue;
+            Data.GachaDecideOrder.Add(order.ItemID);
         }
+
+        EnsureCharacterEventNonFeaturedPool();
     }
 
-    public GachaData GachaData { get; }
 
     public List<int> GetPurpleAvatars()
     {
@@ -59,7 +70,7 @@ public class GachaManager : BasePlayerManager
     {
         var purpleWeapons = new List<int>();
         foreach (var weapon in GameData.EquipmentConfigData.Values)
-            if (weapon.Rarity == RarityEnum.CombatPowerLightconeRarity3)
+            if (weapon.Release && weapon.Rarity == RarityEnum.CombatPowerLightconeRarity3)
                 purpleWeapons.Add(weapon.EquipmentID);
         return purpleWeapons;
     }
@@ -68,7 +79,8 @@ public class GachaManager : BasePlayerManager
     {
         var purpleWeapons = new List<int>();
         foreach (var weapon in GameData.EquipmentConfigData.Values)
-            if (weapon.Rarity == RarityEnum.CombatPowerLightconeRarity4)
+            if (weapon.Release && weapon.Rarity == RarityEnum.CombatPowerLightconeRarity4 &&
+                IsGachaEligibleFourStarLightCone(weapon.EquipmentID))
                 purpleWeapons.Add(weapon.EquipmentID);
         return purpleWeapons;
     }
@@ -82,7 +94,7 @@ public class GachaManager : BasePlayerManager
     {
         var weapons = new List<int>();
         foreach (var weapon in GameData.EquipmentConfigData.Values)
-            if (weapon.Rarity == RarityEnum.CombatPowerLightconeRarity5)
+            if (weapon.Release && weapon.Rarity == RarityEnum.CombatPowerLightconeRarity5)
                 weapons.Add(weapon.EquipmentID);
         return weapons;
     }
@@ -111,27 +123,54 @@ public class GachaManager : BasePlayerManager
     public async ValueTask<DoGachaScRsp?> DoGacha(int bannerId, int times)
     {
         var banner = GameData.BannersConfig.Banners.Find(x => x.GachaId == bannerId);
-        if (banner == null) return null;
-        Player.InventoryManager?.RemoveItem(banner.GachaType.GetCostItemId(), times);
-        var decideItem = GachaData.GachaDecideOrder.GetRange(0, 7);
+        if (banner == null) return BuildGachaError(bannerId, Retcode.RetGachaIdNotExist);
+
+        if (times is not (1 or 10))
+            return BuildGachaError(bannerId, Retcode.RetGachaNumInvalid);
+
+        var pityState = Data.GetPityState(GetPityFamily(banner.GachaType));
+        if (banner.GachaType == GachaTypeEnum.Newbie && pityState.TotalPulls + times > NewbieGachaLimit)
+            return BuildGachaError(bannerId, Retcode.RetGachaNewbieClose);
+
+        var costItemId = banner.GachaType.GetCostItemId();
+        var costItemCount = GetGachaCost(banner.GachaType, times);
+        if (!HasEnoughItem(costItemId, costItemCount))
+            return BuildGachaError(bannerId, Retcode.RetItemNotEnough);
+
+        // Resolved before anything is charged: a banner can list rate-up ids the loaded resources do not
+        // contain, in which case a draw yields 0 and the ItemConfigData lookup further down would throw
+        // after the tickets were already spent.
+        var fallbackItem = GetBlueWeapons().FirstOrDefault(GameData.ItemConfigData.ContainsKey);
+        if (fallbackItem == 0) return BuildGachaError(bannerId, Retcode.RetGachaIdNotExist);
+
+        ItemData? removedCostItem = null;
+        if (costItemId > 0 && costItemCount > 0 && Player.InventoryManager != null)
+            removedCostItem = await Player.InventoryManager.RemoveItem(costItemId, costItemCount, sync: false);
+
+        var decideItem = GetCharacterEventNonFeaturedPool();
         var items = new List<int>();
         for (var i = 0; i < times; i++)
         {
-            var item = banner.DoGacha(decideItem, GetPurpleAvatars(), GetPurpleWeapons(), GetGoldWeapons(),
-                GetBlueWeapons(), GachaData);
+            var item = banner.DoGacha(decideItem, GetGoldAvatars(), GetPurpleAvatars(), GetPurpleWeapons(),
+                GetGoldWeapons(), GetBlueWeapons(), Data);
+            // Empty pool -> substitute the 3-star fallback so the player still gets a result.
+            if (item == 0 || !GameData.ItemConfigData.ContainsKey(item)) item = fallbackItem;
+
             items.Add(item);
         }
+        MarkGachaDataDirty();
 
         var gachaItems = new List<GachaItem>();
         var syncItems = new List<ItemData>();
-        
+        if (removedCostItem != null) syncItems.Add(removedCostItem);
+        // get rarity of item
         foreach (var item in items)
         {
             var dirt = 0;
             var star = 0;
             var rarity = GetRarity(item);
 
-            GachaData.GachaHistory.Add(new GachaInfo
+            Data.GachaHistory.Add(new GachaInfo
             {
                 GachaId = bannerId,
                 ItemId = item,
@@ -208,10 +247,12 @@ public class GachaManager : BasePlayerManager
             }
 
             ItemData? i;
+            var isNewAvatar = false;
             if (GameData.ItemConfigData[item].ItemMainType == ItemMainTypeEnum.AvatarCard &&
                 Player.AvatarManager!.GetFormalAvatar(item) == null)
             {
                 i = null;
+                isNewAvatar = true;
                 await Player.AvatarManager!.AddAvatar(item, isGacha: true);
             }
 
@@ -229,6 +270,7 @@ public class GachaManager : BasePlayerManager
                 Level = 1,
                 Rank = 1
             };
+            gachaItem.IsNew = isNewAvatar;
 
             var tokenItem = new ItemList();
             if (dirt > 0)
@@ -282,8 +324,9 @@ public class GachaManager : BasePlayerManager
             GachaId = (uint)bannerId,
             GachaNum = (uint)times
         };
+        // TODO 4.3: 4.2 的 DoGachaScRsp 新手池抽数/上限字段 (FJIBOAGDNDG/OKFNNHNLBOO) 在 4.3
+        // proto 重排后无法可靠对应，暂不下发新手池进度计数 (pity 状态仍持久化于 GachaData)。
         proto.GachaItemList.AddRange(gachaItems);
-
         return proto;
     }
 
@@ -293,9 +336,149 @@ public class GachaManager : BasePlayerManager
         {
             GachaRandom = (uint)Random.Shared.Next(1000, 1999)
         };
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         foreach (var banner in GameData.BannersConfig.Banners)
-            proto.GachaInfoList.Add(banner.ToInfo(GachaData.GachaDecideOrder, GetGoldAvatars()));
+        {
+            if (banner.GachaType == GachaTypeEnum.Newbie &&
+                Data.GetPityState(GachaPityFamilyEnum.Newbie).TotalPulls >= NewbieGachaLimit)
+                continue;
+
+            // The client hides a banner whose window has closed anyway; skipping it here keeps the
+            // response honest and makes DoGacha's RetGachaIdNotExist the only "no such pool" path.
+            if (!banner.IsActiveAt(now)) continue;
+
+            var newbiePulls = banner.GachaType == GachaTypeEnum.Newbie
+                ? Data.GetPityState(GachaPityFamilyEnum.Newbie).TotalPulls
+                : 0;
+            var newbieLimit = banner.GachaType == GachaTypeEnum.Newbie ? NewbieGachaLimit : 0;
+            proto.GachaInfoList.Add(banner.ToInfo(GetCharacterEventNonFeaturedPool(), GetGoldAvatars(), newbiePulls,
+                newbieLimit));
+        }
+
+        // TODO 4.3: 4.2 的角色活动 decide-item / featured pool 下发结构 (NMBAAOBBJMI / OEIEJHBCOOM)
+        // 在 4.3 GetGachaInfoScRsp 重排后无对应字段，暂不下发自选池信息。
 
         return proto;
+    }
+
+    public Retcode SetCharacterEventNonFeaturedPool(int gachaId, int decideItemType, IEnumerable<uint> selectedItems)
+    {
+        var banner = GameData.BannersConfig.Banners.Find(x => x.GachaId == gachaId);
+        if (banner == null)
+            return Retcode.RetGachaIdNotExist;
+
+        if (banner.GachaType is not (GachaTypeEnum.AvatarUp or GachaTypeEnum.CollaborationAvatarUp))
+            return Retcode.RetGachaDecideItemTypeInvalid;
+
+        var selected = selectedItems.Select(id => (int)id).Distinct().ToList();
+        if (selected.Count != CelestialInvitationPoolSize)
+            return Retcode.RetGachaDecideItemIdInvalid;
+
+        var allowed = GetAllGoldAvatars().ToHashSet();
+        if (selected.Any(id => !allowed.Contains(id)))
+            return Retcode.RetGachaDecideItemIdInvalid;
+
+        Data.CharacterEventNonFeaturedPool = selected;
+        Data.GachaDecideOrder = selected;
+        Data.CharacterEventDecideItemType = decideItemType;
+        MarkDirty();
+        return Retcode.RetSucc;
+    }
+
+    public List<int> GetCharacterEventNonFeaturedPool()
+    {
+        EnsureCharacterEventNonFeaturedPool();
+        return Data.CharacterEventNonFeaturedPool.Take(CelestialInvitationPoolSize).ToList();
+    }
+
+    private void EnsureCharacterEventNonFeaturedPool()
+    {
+        Data.CharacterEventNonFeaturedPool ??= [];
+        var allowed = GetAllGoldAvatars().ToHashSet();
+        var selected = Data.CharacterEventNonFeaturedPool
+            .Where(allowed.Contains)
+            .Distinct()
+            .Take(CelestialInvitationPoolSize)
+            .ToList();
+
+        foreach (var id in Data.GachaDecideOrder.Where(allowed.Contains))
+        {
+            if (selected.Count >= CelestialInvitationPoolSize) break;
+            if (!selected.Contains(id)) selected.Add(id);
+        }
+
+        foreach (var id in GetGoldAvatars().Where(allowed.Contains))
+        {
+            if (selected.Count >= CelestialInvitationPoolSize) break;
+            if (!selected.Contains(id)) selected.Add(id);
+        }
+
+        Data.CharacterEventNonFeaturedPool = selected;
+        Data.GachaDecideOrder = selected;
+    }
+
+    private static GachaPityFamilyEnum GetPityFamily(GachaTypeEnum gachaType)
+    {
+        return gachaType switch
+        {
+            GachaTypeEnum.Newbie => GachaPityFamilyEnum.Newbie,
+            GachaTypeEnum.Normal => GachaPityFamilyEnum.Normal,
+            GachaTypeEnum.WeaponUp => GachaPityFamilyEnum.WeaponUp,
+            GachaTypeEnum.AvatarUp => GachaPityFamilyEnum.AvatarUp,
+            GachaTypeEnum.CollaborationAvatarUp => GachaPityFamilyEnum.AvatarCollaboration,
+            GachaTypeEnum.CollaborationWeaponUp => GachaPityFamilyEnum.WeaponCollaboration,
+            _ => GachaPityFamilyEnum.Normal
+        };
+    }
+
+    private bool HasEnoughItem(int itemId, int count)
+    {
+        if (itemId <= 0 || count <= 0) return true;
+        var item = Player.InventoryManager?.GetItem(itemId);
+        return item is { Count: >= 0 } && item.Count >= count;
+    }
+
+    private static int GetGachaCost(GachaTypeEnum gachaType, int times)
+    {
+        if (gachaType == GachaTypeEnum.Newbie && times == 10)
+            return NewbieTenPullCost;
+
+        return times;
+    }
+
+    private static bool IsGachaEligibleFourStarLightCone(int equipmentId)
+    {
+        return !IsBattlePassLightCone(equipmentId) && !IsEventLightCone(equipmentId);
+    }
+
+    private static bool IsBattlePassLightCone(int equipmentId)
+    {
+        return GameData.BattlePassRewardItemIds.Contains(equipmentId) ||
+               KnownBattlePassLightCones.Contains(equipmentId);
+    }
+
+    private static bool IsEventLightCone(int equipmentId)
+    {
+        return equipmentId is >= 22000 and < 23000;
+    }
+
+    private static DoGachaScRsp BuildGachaError(int bannerId, Retcode retcode)
+    {
+        return new DoGachaScRsp
+        {
+            GachaId = (uint)Math.Max(0, bannerId),
+            Retcode = (uint)retcode
+        };
+    }
+
+    private int GetFirstAvatarUpGachaId()
+    {
+        return GameData.BannersConfig.Banners.FirstOrDefault(banner => banner.GachaType == GachaTypeEnum.AvatarUp)
+            ?.GachaId ?? 0;
+    }
+
+    private void MarkGachaDataDirty()
+    {
+        MarkDirty();
     }
 }

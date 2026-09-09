@@ -5,10 +5,10 @@ using March7thHoney.Util;
 
 namespace March7thHoney.Kcp.KcpSharp;
 
-
-
-
-
+/// <summary>
+///     A Socket transport for upper-level connections.
+/// </summary>
+/// <typeparam name="T"></typeparam>
 public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T : class, IKcpConversation
 {
     private readonly int _mtu;
@@ -17,11 +17,11 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
     private CancellationTokenSource? _cts;
     private bool _disposed;
 
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Construct a socket transport with the specified socket and remote endpoint.
+    /// </summary>
+    /// <param name="socket">The socket instance.</param>
+    /// <param name="mtu">The maximum packet size that can be transmitted.</param>
     protected KcpSocketTransport(UdpClient listener, int mtu)
     {
         _udpListener = listener ?? throw new ArgumentNullException(nameof(listener));
@@ -29,21 +29,21 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
         if (mtu < 50) throw new ArgumentOutOfRangeException(nameof(mtu));
     }
 
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Get the upper-level connection instace. If Start is not called or the transport is closed,
+    ///     <see cref="InvalidOperationException" /> will be thrown.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Start is not called or the transport is closed.</exception>
     public T Connection => _connection ?? throw new InvalidOperationException();
 
-    
+    /// <inheritdoc />
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-    
+    /// <inheritdoc />
     public ValueTask SendPacketAsync(Memory<byte> packet, IPEndPoint endpoint,
         CancellationToken cancellationToken = default)
     {
@@ -53,17 +53,17 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
         return new ValueTask(_udpListener.SendAsync(packet.ToArray(), endpoint, cancellationToken).AsTask());
     }
 
-    
-    
-    
-    
+    /// <summary>
+    ///     Create the upper-level connection instance.
+    /// </summary>
+    /// <returns>The upper-level connection instance.</returns>
     protected abstract T Activate();
 
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Allocate a block of memory used to receive from socket.
+    /// </summary>
+    /// <param name="size">The minimum size of the buffer.</param>
+    /// <returns>The allocated memory buffer.</returns>
     protected virtual IMemoryOwner<byte> AllocateBuffer(int size)
     {
 #if NEED_POH_SHIM
@@ -73,19 +73,19 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
 #endif
     }
 
-    
-    
-    
-    
-    
+    /// <summary>
+    ///     Handle exception thrown when receiving from remote endpoint.
+    /// </summary>
+    /// <param name="ex">The exception thrown.</param>
+    /// <returns>Whether error should be ignored.</returns>
     protected virtual bool HandleException(Exception ex)
     {
         return false;
     }
 
-    
-    
-    
+    /// <summary>
+    ///     Create the upper-level connection and start pumping packets from the socket to the upper-level connection.
+    /// </summary>
     public void Start()
     {
         if (_disposed) throw new ObjectDisposedException(nameof(KcpSocketTransport));
@@ -131,7 +131,7 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
         }
         catch (OperationCanceledException)
         {
-            
+            // Do nothing
         }
         catch (Exception ex)
         {
@@ -163,10 +163,10 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
         return result;
     }
 
-    
-    
-    
-    
+    /// <summary>
+    ///     Dispose all the managed and the unmanaged resources used by this instance.
+    /// </summary>
+    /// <param name="disposing">If managed resources should be disposed.</param>
     protected virtual void Dispose(bool disposing)
     {
         if (!_disposed)
@@ -189,9 +189,9 @@ public abstract class KcpSocketTransport<T> : IKcpTransport, IDisposable where T
         }
     }
 
-    
-    
-    
+    /// <summary>
+    ///     Dispose the unmanaged resources used by this instance.
+    /// </summary>
     ~KcpSocketTransport()
     {
         Dispose(false);

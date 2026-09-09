@@ -1,18 +1,18 @@
+using System.Text.Json;
 using March7thHoney.WebServer.Objects;
-using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
+using Microsoft.AspNetCore.Http;
 
 namespace March7thHoney.WebServer.Handler;
 
 public class UsernameLoginHandler
 {
-    public JsonResult HandleShieldLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
+    public IResult HandleShieldLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
     {
         LoginSessionFactory.LoginFailure failure;
         if (!LoginSessionFactory.TryCreateSession(account, password, identityKeys, out var session, out failure))
-            return new JsonResult(LoginResJson.Error(failure.Retcode, failure.Message));
+            return Results.Json(LoginResJson.Error(failure.Retcode, failure.Message));
 
-        return new JsonResult(LoginResJson.Success(
+        return Results.Json(LoginResJson.Success(
             session.Uid,
             session.Username,
             session.Email,
@@ -20,70 +20,40 @@ public class UsernameLoginHandler
             session.DispatchToken));
     }
 
-    public JsonResult HandlePassportLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
+    public IResult HandlePassportLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
     {
         LoginSessionFactory.LoginFailure failure;
         if (!LoginSessionFactory.TryCreateSession(account, password, identityKeys, out var session, out failure))
-            return new JsonResult(new { retcode = failure.Retcode, message = failure.Message, data = (object?)null });
+            return Results.Json(new StatusResult(failure.Retcode, failure.Message));
 
-        return new JsonResult(BuildPassportLoginBody(session));
+        return Results.Json(BuildPassportLoginBody(session));
     }
 
-    public ContentResult HandleLegacyPassportLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
+    public IResult HandleLegacyPassportLogin(string account, string password, IReadOnlyCollection<string> identityKeys)
     {
         LoginSessionFactory.LoginFailure failure;
         if (!LoginSessionFactory.TryCreateSession(account, password, identityKeys, out var session, out failure))
-        {
-            return new ContentResult
-            {
-                ContentType = "application/json",
-                Content = JsonConvert.SerializeObject(PassportLoginResJson.Error(failure.Retcode, failure.Message))
-            };
-        }
+            return Results.Text(
+                JsonSerializer.Serialize(PassportLoginResJson.Error(failure.Retcode, failure.Message),
+                    WebJsonContext.Default.PassportLoginResJson),
+                "application/json");
 
-        return new ContentResult
-        {
-            ContentType = "application/json",
-            Content = JsonConvert.SerializeObject(BuildPassportLoginBody(session))
-        };
+        return Results.Text(
+            JsonSerializer.Serialize(BuildPassportLoginBody(session), WebJsonContext.Default.PassportLoginBody),
+            "application/json");
     }
 
-    private static object BuildPassportLoginBody(LoginSessionFactory.LoginSession session)
+    private static PassportLoginBody BuildPassportLoginBody(LoginSessionFactory.LoginSession session)
     {
-        return new
-        {
-            retcode = 0,
-            message = "OK",
-            data = new
-            {
-                bind_email_action_ticket = "",
-                reactivate_action_token = "",
-                user_info = new
-                {
-                    aid = session.Uid,
-                    mid = session.Uid,
-                    account_name = session.Username,
-                    email = session.Email,
-                    is_email_verify = session.IsEmailVerified ? 1 : 0,
-                    area_code = "**",
-                    mobile = "",
-                    safe_area_code = "",
-                    safe_mobile = "",
-                    realname = "",
-                    identity_code = "",
-                    rebind_area_code = "",
-                    rebind_mobile = "",
-                    rebind_mobile_time = "1",
-                    links = Array.Empty<object>(),
-                    country = "CN",
-                    password_time = "1",
-                    is_adult = 0,
-                    unmasked_email = session.Email,
-                    unmasked_email_type = string.IsNullOrWhiteSpace(session.Email) ? 0 : 1
-                },
-                token = new { token_type = 1, token = session.DispatchToken },
-                ext_user_info = new { guardian_email = "", birth = "0" }
-            }
-        };
+        var userInfo = new PassportUserInfo(
+            session.Uid, session.Uid, session.Username, session.Email, session.IsEmailVerified ? 1 : 0, "**",
+            "", "", "", "", "",
+            "", "", "1", [], "CN",
+            "1", 0, session.Email, string.IsNullOrWhiteSpace(session.Email) ? 0 : 1);
+
+        return new PassportLoginBody(0, "OK", new PassportLoginBodyData(
+            "", "", userInfo,
+            new PassportToken(1, session.DispatchToken),
+            new PassportExtUserInfo("", "0")));
     }
 }

@@ -1,5 +1,6 @@
 using March7thHoney.Command;
 using March7thHoney.Util;
+using System.Text.Json.Serialization;
 
 namespace March7thHoney.Configuration;
 
@@ -10,9 +11,18 @@ public class ConfigContainer
     public GameServerConfig GameServer { get; set; } = new();
     public PathConfig Path { get; set; } = new();
     public DatabaseConfig Database { get; set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LifecycleNotificationConfig? LifecycleNotification { get; set; }
     public ServerOption ServerOption { get; set; } = new();
     public MuipServerConfig MuipServer { get; set; } = new();
     public WebSecurityConfig WebSecurity { get; set; } = new();
+}
+
+public class LifecycleNotificationConfig
+{
+    public bool Enabled { get; set; } = false;
+    public int ControlApiPort { get; set; } = 3101;
+    public string ControlApiToken { get; set; } = "";
 }
 
 public class HttpServerConfig
@@ -22,7 +32,7 @@ public class HttpServerConfig
     public int Port { get; set; } = 21000;
     public bool UseSSL { get; set; } = false;
     public bool SendHotfix { get; set; } = true;
-    public bool UseFetchRemoteHotfix { get; set; } = false;
+    public bool UseFetchRemoteHotfix { get; set; } = true;
 
     public string GetDisplayAddress()
     {
@@ -61,10 +71,11 @@ public class GameServerConfig
 public class PathConfig
 {
     public string ResourcePath { get; set; } = "Resources";
+    public List<string> ExcelOutputDirs { get; set; } = ["ExcelOutput", "ExcelOutputGameCore"];
     public string ConfigPath { get; set; } = "Config";
     public string DatabasePath { get; set; } = "Config/Database";
     public string LogPath { get; set; } = "Config/Logs";
-    public string PluginPath { get; set; } = "Config/Plugins";
+    public string LanguagePath { get; set; } = "Config/Languages";
 }
 
 public class DatabaseConfig
@@ -83,8 +94,8 @@ public class ServerOption
     public string DefaultNickname { get; set; } = "Trailblazer";
     public int StartTrailblazerLevel { get; set; } = 1;
     public bool AutoUpgradeWorldLevel { get; set; } = true;
-    public bool EnableMission { get; set; } = false; 
-    public bool EnableQuest { get; set; } = true; 
+    public bool EnableMission { get; set; } = false; // experimental
+    public bool EnableQuest { get; set; } = true; // experimental
     public bool AutoLightSection { get; set; } = true;
     public string Language { get; set; } = "EN";
     public string FallbackLanguage { get; set; } = "EN";
@@ -94,13 +105,22 @@ public class ServerOption
     public ServerAnnounce ServerAnnounce { get; set; } = new();
     public ServerProfile ServerProfile { get; set; } = new();
     public WatermarkConfig Watermark { get; set; } = new();
+    public NetStatusConfig NetStatus { get; set; } = new();
+    public ChallengePeakOption ChallengePeak { get; set; } = new();
     public AuthOption Auth { get; set; } = new();
-    public bool AutoCreateUser { get; set; } = true;
+    public bool AutoCreateUser { get; set; } = false;
     public LogOption LogOption { get; set; } = new();
     public ServerConfig ServerConfig { get; set; } = new();
     public int FarmingDropRate { get; set; } = 1;
     public bool UseCache { get; set; } = true;
+
+    // Load Excel tables for paused gameplay modules (MatchThree / Marble / Cake).
+    public bool LoadPausedModuleData { get; set; } = false;
+
     public bool EnableMonthCard { get; set; } = true;
+
+    // Show the Oneiric Shard tiers and grant them instantly instead of running the real SDK payment.
+    public bool EnableFakeRecharge { get; set; } = true;
     public ServerTimeOption ServerTime { get; set; } = new();
     public WelcomeMailConfig WelcomeMail { get; set; } = new();
 
@@ -108,6 +128,27 @@ public class ServerOption
     {
         return Math.Max(Math.Min(FarmingDropRate, 999), 1);
     }
+}
+
+public class NetStatusConfig
+{
+    public bool Enabled { get; set; } = false;
+    public int LatencyMs { get; set; } = 37;
+    public string Color { get; set; } = "#FEC6DF";
+
+    public bool TryGetColor(out int rgb)
+    {
+        rgb = 0;
+        var color = Color?.Trim();
+        return LatencyMs >= 0 && color is { Length: 7 } && color[0] == '#' &&
+               int.TryParse(color.AsSpan(1), System.Globalization.NumberStyles.AllowHexSpecifier,
+                   System.Globalization.CultureInfo.InvariantCulture, out rgb);
+    }
+}
+
+public class ChallengePeakOption
+{
+    public bool RequireKnightClearsForNormalBoss { get; set; } = false;
 }
 
 public class WatermarkConfig
@@ -136,6 +177,26 @@ public class AuthOption
     public int EmailVerificationTokenExpireMinutes { get; set; } = 1440;
     public int PasswordResetTokenExpireMinutes { get; set; } = 60;
     public EmailOption Email { get; set; } = new();
+    public AntiAbuseOption AntiAbuse { get; set; } = new();
+}
+
+public class AntiAbuseOption
+{
+    public bool RateLimitEnabled { get; set; } = true;
+    public int RateLimitMaxRequests { get; set; } = 10;
+    public int RateLimitWindowSeconds { get; set; } = 60;
+    public int RateLimitBlockSeconds { get; set; } = 900;
+    public bool LimitRegistrationPerIdentity { get; set; } = true;
+    public string RegistrationIdentityMode { get; set; } = "DeviceOrIp";
+    public bool RequireRegistrationIdentity { get; set; } = false;
+    public bool LoginRateLimitEnabled { get; set; } = true;
+    public int LoginRateLimitMaxRequests { get; set; } = 8;
+    public int LoginRateLimitWindowSeconds { get; set; } = 900;
+    public int LoginRateLimitBlockSeconds { get; set; } = 900;
+    public bool EmailRateLimitEnabled { get; set; } = true;
+    public int EmailRateLimitMaxRequests { get; set; } = 3;
+    public int EmailRateLimitWindowSeconds { get; set; } = 3600;
+    public int EmailRateLimitBlockSeconds { get; set; } = 900;
 }
 
 public class EmailOption
@@ -188,7 +249,7 @@ public class WelcomeMailItemConfig
 public class ServerTimeOption
 {
     public bool EnableFakeServerTime { get; set; } = false;
-    
+    // yyyy-MM-dd or "today"
     public string FixedDate { get; set; } = "2026-05-12";
 }
 
@@ -197,7 +258,7 @@ public class ServerConfig
     public bool RunDispatch { get; set; } = true;
     public string FromDispatchBaseUrl { get; set; } = "";
     public string ServerExchangeSecret { get; set; } = "";
-    public bool RunGateway { get; set; } = true; 
+    public bool RunGateway { get; set; } = true; // if run gateway, also run game server
     public List<ServerRegion> Regions { get; set; } = [];
 }
 
@@ -206,7 +267,7 @@ public class ServerRegion
     public string GateWayAddress { get; set; } = "";
     public string GameServerName { get; set; } = "";
     public string GameServerId { get; set; } = "";
-    public int EnvType { get; set; } = 2;
+    public int EnvType { get; set; } = 21;
 }
 
 public class LogOption

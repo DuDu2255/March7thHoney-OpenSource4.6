@@ -29,7 +29,7 @@ public static class UtilTools
             }
             catch
             {
-                
+                // ignored
             }
 
         return true;
@@ -46,7 +46,7 @@ public static class UtilTools
             }
             catch
             {
-                
+                // ignored
             }
 
         return false;

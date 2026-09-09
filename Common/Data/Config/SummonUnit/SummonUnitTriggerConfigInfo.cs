@@ -1,11 +1,13 @@
+using MemoryPack;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.SummonUnit;
 
-public class SummonUnitTriggerConfigInfo
+[MemoryPackable]
+public partial class SummonUnitTriggerConfigInfo
 {
-    
-    
+    //public UnitHintTriggerConfig HintTrigger;
+    //public PropSoundConfig SoundTrigger;
     public List<UnitCustomTriggerConfigInfo> CustomTriggers { get; set; } = [];
 
     public static SummonUnitTriggerConfigInfo LoadFromJsonObject(JObject obj)

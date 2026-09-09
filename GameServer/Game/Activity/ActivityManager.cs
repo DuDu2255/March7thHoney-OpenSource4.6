@@ -2,7 +2,7 @@ using March7thHoney.Data;
 using March7thHoney.Database;
 using March7thHoney.Database.Activity;
 using March7thHoney.GameServer.Game.Activity.Activities;
-using March7thHoney.GameServer.Game.Activity.Activities.DiceCombat;
+using March7thHoney.GameServer.Game.MultiPlayer.DiceCombat;
 using March7thHoney.GameServer.Game.Player;
 using March7thHoney.Proto;
 
@@ -29,7 +29,6 @@ public class ActivityManager : BasePlayerManager
 
     public TrialActivityInstance? TrialActivityInstance { get; set; }
     public DiceCombatActivityInstance DiceCombat { get; set; }
-
     #endregion
 
     public List<ActivityScheduleData> ToProto()

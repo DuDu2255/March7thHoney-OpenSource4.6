@@ -5,28 +5,26 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.Scene;
 
 [Opcode(CmdIds.UpdateGroupPropertyCsReq)]
-public class HandlerUpdateGroupPropertyCsReq : Handler
+public class HandlerUpdateGroupPropertyCsReq : Handler<UpdateGroupPropertyCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, UpdateGroupPropertyCsReq req)
     {
-        var req = UpdateGroupPropertyCsReq.Parser.ParseFrom(data);
-
-        if (req.FloorId != connection.Player!.SceneInstance!.FloorId)
+        if (req.FloorId != player.SceneInstance!.FloorId)
         {
             await connection.SendPacket(new PacketUpdateGroupPropertyScRsp(Retcode.RetReqParaInvalid));
             return;
         }
 
-        
-        var scene = connection.Player.SceneInstance;
+        // try to get group
+        var scene = player.SceneInstance;
         if (!scene.Groups.Contains((int)req.GroupId))
         {
             await connection.SendPacket(new PacketUpdateGroupPropertyScRsp(Retcode.RetGroupNotExist));
             return;
         }
 
-        
-        var res = await scene.UpdateGroupProperty((int)req.GroupId, req.ELNCJFFJFIH, req.AOBABOGHFKJ);
+        // update group property
+        var res = await scene.UpdateGroupProperty((int)req.GroupId, req.PropertyName, req.OLBEPIBLDBD);
         await connection.SendPacket(new PacketUpdateGroupPropertyScRsp(res, req));
     }
 }

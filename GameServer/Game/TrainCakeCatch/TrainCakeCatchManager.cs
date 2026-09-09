@@ -15,7 +15,11 @@ using System.Collections.Concurrent;
 
 namespace March7thHoney.GameServer.Game.TrainCakeCatch;
 
-public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(player)
+// 4.4 port note: restored from the 4.2-era implementation with the proto surface remapped 1:1 by
+// field-number correspondence onto the re-obfuscated 4.4 messages (e.g. MACJBIAFNOI→JOLAHHGIFHA,
+// MKHIPFHEKCK→POBLGKIGINE). The room-leave oneof case in SocialPlayGameplayOperationScNotify could
+// not be proven structurally (four bare-uint candidates) — see NotifyRoomLeaveAsync.
+public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager<TrainCakeCatchData>(player)
 {
     private sealed class SocialPlayReturnScene
     {
@@ -30,9 +34,9 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
     {
         public required uint OwnerUid { get; init; }
         public HashSet<int> Members { get; } = [];
-        public Dictionary<int, MACJBIAFNOI> Motions { get; } = [];
-        public Dictionary<int, List<MACJBIAFNOI>> MotionHistory { get; } = [];
-        public List<EHKEJEPNGMB> ArrivalHistory { get; } = [];
+        public Dictionary<int, JOLAHHGIFHA> Motions { get; } = [];
+        public Dictionary<int, List<JOLAHHGIFHA>> MotionHistory { get; } = [];
+        public List<PEEEEGAPCOK> ArrivalHistory { get; } = [];
         public SocialPlaySceneContext? SceneContext { get; set; }
     }
 
@@ -51,8 +55,6 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
     private const int OwnRoomGameplayType = 4650;
     private const int MaxBufferedMotionsPerPlayer = 20;
 
-    public TrainCakeCatchData Data { get; } =
-        DatabaseHelper.Instance!.GetInstanceOrCreateNew<TrainCakeCatchData>(player.Uid);
     public uint? CurrentRoomOwnerUid { get; private set; }
     public uint? PendingRoomOwnerUid { get; private set; }
     private SocialPlayReturnScene? ReturnScene { get; set; }
@@ -126,62 +128,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         changed |= SyncCollectedCreatures(target);
 
         if (changed)
-            DatabaseHelper.ToSaveUidList.Add(targetUid);
-    }
-
-    public TrainCakeCatchGetDataScRsp ToGetDataProto()
-    {
-        return ToGetDataProto(CurrentRoomOwnerUid);
-    }
-
-    public TrainCakeCatchGetDataScRsp ToGetDataProto(uint? roomOwnerUid)
-    {
-        var view = ResolveRoomView(roomOwnerUid);
-        EnsureDefaults(view.Data, (int)view.OwnerUid);
-        EnsureDefaults();
-        MKHIPFHEKCK socialPlayRoomData;
-
-        lock (RoomLock)
-        {
-            socialPlayRoomData = Rooms.TryGetValue(view.OwnerUid, out var room)
-                ? BuildSocialPlayRoomDataLocked(room, view.OwnerUid, (uint)Player.Uid)
-                : BuildSocialPlayRoomData(view.OwnerUid, (uint)Player.Uid);
-        }
-
-        var rsp = new TrainCakeCatchGetDataScRsp
-        {
-            DHLGCEGONIB = view.Data.RefreshTime,
-            PEOECDDANNP = BuildDiyProto(view.Data),
-            FMECAHALPKG = socialPlayRoomData,
-            PEPMFGLDGOH = new FAOPPAFAJLO(),
-            HJOFGOINOAK = new LLKEMMMEPOB
-            {
-                EHLIFHPILPG = (uint)Math.Max(0, Data.AvailableSearchCount),
-                FIHMHJHGHOG = Data.DailyRefreshTime
-            }
-        };
-
-        rsp.PerformanceIdList.AddRange(GetUnlockedPerformanceIds(Data).Select(x => (uint)x));
-
-        rsp.AFEJACMLOLH.AddRange(view.Data.CatTreeSlots.Select(x => new NPLEDHFMFDM
-        {
-            HCJPDNDOHAM = (uint)x.CreatureId,
-            Slot = (uint)x.Slot
-        }));
-
-        foreach (var entry in GetCollectedCreatures(Data))
-        {
-            rsp.BLEDIOOJPNL.Add(new PKILNDNCAMI
-            {
-                HCJPDNDOHAM = (uint)entry.CreatureId,
-                Count = (uint)entry.Count
-            });
-        }
-
-        foreach (var creatureId in Data.SearchCreatureIds)
-            rsp.KALIBGCODNF.Add(new LGGABHPGPDD { HCJPDNDOHAM = (uint)creatureId });
-
-        return rsp;
+            DatabaseHelper.MarkDirty(targetUid);
     }
 
     public uint GetGameplayType(uint roomOwnerUid, uint roomPlayerUid)
@@ -198,13 +145,13 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         return view.Data.RefreshTime;
     }
 
-    public async ValueTask<MKHIPFHEKCK> EnterSocialPlayRoomAsync(uint roomOwnerUid)
+    public async ValueTask<POBLGKIGINE> EnterSocialPlayRoomAsync(uint roomOwnerUid)
     {
         var motion = CreateMotion(Player.Data.Pos, Player.Data.Rot, true);
         List<int> existingMembers;
         List<int> previousRoomMembers = [];
         uint? previousRoomOwnerUid = null;
-        MKHIPFHEKCK snapshot;
+        POBLGKIGINE snapshot;
         lock (RoomLock)
         {
             if (CurrentRoomOwnerUid == roomOwnerUid
@@ -281,13 +228,13 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             _ = NotifyRoomLeaveAsync(leavingRoomOwnerUid.Value, remainingMembers);
     }
 
-    public async ValueTask<MKHIPFHEKCK> AttachToSocialPlayRoomAsync(uint roomOwnerUid)
+    public async ValueTask<POBLGKIGINE> AttachToSocialPlayRoomAsync(uint roomOwnerUid)
     {
         var motion = CreateMotion(Player.Data.Pos, Player.Data.Rot, true);
         List<int> existingMembers = [];
         List<int> previousRoomMembers = [];
         uint? previousRoomOwnerUid = null;
-        MKHIPFHEKCK snapshot;
+        POBLGKIGINE snapshot;
         var shouldNotifyJoin = false;
 
         lock (RoomLock)
@@ -425,13 +372,13 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             if (!Rooms.TryGetValue(roomOwnerUid, out var room) || room.ArrivalHistory.Count == 0)
                 return null;
 
-            var popup = new HMDJNPFBOMM();
-            popup.IMBCJKHMOAB.AddRange(room.ArrivalHistory.Select(entry => entry.Clone()));
+            var popup = new IKBDJLNEPBH();
+            popup.HFLOPHNBKGN.AddRange(room.ArrivalHistory.Select(entry => entry.Clone()));
             return new SocialPlayGameplayOperationScNotify
             {
-                MFBDMLPDEOE = roomOwnerUid,
-                NCFHGIBCEBG = roomOwnerUid,
-                AFCCFJOEIOH = popup
+                RoomOwnerUid = roomOwnerUid,
+                OpUid = roomOwnerUid,
+                IMPBCBPIFAG = popup
             };
         }
     }
@@ -443,7 +390,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         HashSet<int> recipientUids = [];
         int? implicitOwnerUid = null;
-        MACJBIAFNOI? currentMotion = null;
+        JOLAHHGIFHA? currentMotion = null;
         lock (RoomLock)
         {
             if (!Rooms.TryGetValue(roomOwnerUid, out var room))
@@ -464,11 +411,11 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         var playerStateNotify = new SocialPlayGameplayOperationScNotify
         {
-            MFBDMLPDEOE = roomOwnerUid,
-            NCFHGIBCEBG = (uint)Player.Uid,
-            PEFPFCINABN = BuildSocialPlayPlayer((uint)Player.Uid, false)
+            RoomOwnerUid = roomOwnerUid,
+            OpUid = (uint)Player.Uid,
+            GNLAECODENP = BuildSocialPlayPlayer((uint)Player.Uid, false)
         };
-        playerStateNotify.PEFPFCINABN.IACKOCPGIAK = BuildSimpleMotion(currentMotion, Player.Data.Pos, Player.Data.Rot);
+        playerStateNotify.GNLAECODENP.NJDCPMENIFG = BuildSimpleMotion(currentMotion, Player.Data.Pos, Player.Data.Rot);
 
         foreach (var uid in recipientUids)
         {
@@ -482,37 +429,36 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         }
     }
 
-    public MKHIPFHEKCK BuildSocialPlayRoomData(uint roomOwnerUid, uint roomPlayerUid)
+    public POBLGKIGINE BuildSocialPlayRoomData(uint roomOwnerUid, uint roomPlayerUid)
     {
         var view = ResolveRoomView(roomOwnerUid);
         EnsureDefaults(view.Data, (int)view.OwnerUid);
         var gameplayType = GetGameplayType(roomOwnerUid, roomPlayerUid);
-        var snapshot = new MKHIPFHEKCK();
-        snapshot.MFBDMLPDEOE = roomOwnerUid;
-        snapshot.DFJBNHPAICA = new GFOIOIACDCH
+        var snapshot = new POBLGKIGINE();
+        snapshot.RoomOwnerUid = roomOwnerUid;
+        snapshot.LNMGOFCOMED = new PBMDEBCGNMD
         {
-            DMGCIDGKPFF = new MCPPIEJEBEF
+            IKJNIKIGFLF = new MNCBEDBDDHL
             {
-                LEKGBMCOJDB = new NKLAFFLJCHG()
+                JKNLCEEDAHJ = new KHADHDLCNOI()
             },
-            PAIBKOMPFOE = gameplayType,
-            KPDHCPCCPNA = new GCOIFAHPGDF
+            PKHFMJDNKOE = new JPAOIPLDKHB
             {
-                DHLGCEGONIB = view.Data.RefreshTime,
-                GJGAGFEJABC = (uint)Math.Max(1, view.Data.DiyTheme),
-                PEOECDDANNP = BuildDiyProto(view.Data)
+                CMHKFNFKGOI = view.Data.RefreshTime,
+                HBKEPFKDAMI = (uint)Math.Max(1, view.Data.DiyTheme),
+                NLJBJMDPBGN = BuildDiyProto(view.Data)
             }
         };
 
         if (gameplayType == OwnRoomGameplayType)
         {
-            snapshot.DFJBNHPAICA.KPDHCPCCPNA.FIHMHJHGHOG = view.Data.DailyRefreshTime;
-            snapshot.DFJBNHPAICA.KPDHCPCCPNA.GIIIBCKEODP = (uint)Math.Max(1, view.Data.CatTreeSlots.Count + 1);
+            snapshot.LNMGOFCOMED.PKHFMJDNKOE.DBIKJPDBMOE = view.Data.DailyRefreshTime;
+            snapshot.LNMGOFCOMED.PKHFMJDNKOE.GAEKEFEKCBD = (uint)Math.Max(1, view.Data.CatTreeSlots.Count + 1);
         }
 
-        snapshot.DFJBNHPAICA.KPDHCPCCPNA.AFEJACMLOLH.Add(view.Data.CatTreeSlots.Select(x => new NPLEDHFMFDM
+        snapshot.LNMGOFCOMED.PKHFMJDNKOE.BJPHDKEBOBK.Add(view.Data.CatTreeSlots.Select(x => new IKAHKMNCFDN
         {
-            HCJPDNDOHAM = (uint)x.CreatureId,
+            PCPDHEIEJFO = (uint)x.CreatureId,
             Slot = (uint)x.Slot
         }));
         snapshot.PlayerInfo.Clear();
@@ -530,21 +476,21 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         return snapshot;
     }
 
-    public async ValueTask HandleRoomMovement(MKLFLKDHLIC req)
+    public async ValueTask HandleRoomMovement(JGAMELLGLGE req)
     {
-        if (CurrentRoomOwnerUid is not { } roomOwnerUid || req.IACKOCPGIAK == null)
+        if (CurrentRoomOwnerUid is not { } roomOwnerUid || req.NJDCPMENIFG == null)
             return;
 
         List<int> otherMembers;
         int? implicitOwnerUid = null;
-        MACJBIAFNOI motion;
+        JOLAHHGIFHA motion;
 
         lock (RoomLock)
         {
             if (!Rooms.TryGetValue(roomOwnerUid, out var room))
                 return;
 
-            motion = req.IACKOCPGIAK.Clone();
+            motion = req.NJDCPMENIFG.Clone();
             RecordMotionLocked(room, Player.Uid, motion);
             otherMembers = room.Members.Where(uid => uid != Player.Uid).ToList();
 
@@ -552,18 +498,18 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
                 implicitOwnerUid = (int)roomOwnerUid;
         }
 
-        var ackPacket = new BasePacket(CmdIds.IPCKGLOHJLH);
-        ackPacket.SetData(new IPCKGLOHJLH());
+        var ackPacket = new BasePacket(CmdIds.JKILAALMFIB);
+        ackPacket.SetData(new JKILAALMFIB());
         await Player.SendPacket(ackPacket);
 
         var notify = new SocialPlayRoomPlayerMoveScNotify
         {
-            MFBDMLPDEOE = roomOwnerUid,
-            NCFHGIBCEBG = (uint)Player.Uid,
-            FIPIDGKPFHA = new CCKCCKHEFFB
+            RoomOwnerUid = roomOwnerUid,
+            OpUid = (uint)Player.Uid,
+            JENKGODEIOM = new MHNNEFBOPIE
             {
-                NCFHGIBCEBG = (uint)Player.Uid,
-                FIPIDGKPFHA = { motion }
+                OpUid = (uint)Player.Uid,
+                JENKGODEIOM = { motion }
             }
         };
 
@@ -595,14 +541,14 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
                 {
                     var notify = new SocialPlayRoomPlayerMoveScNotify
                     {
-                        MFBDMLPDEOE = roomOwnerUid,
-                        NCFHGIBCEBG = (uint)entry.Key,
-                        FIPIDGKPFHA = new CCKCCKHEFFB
+                        RoomOwnerUid = roomOwnerUid,
+                        OpUid = (uint)entry.Key,
+                        JENKGODEIOM = new MHNNEFBOPIE
                         {
-                            NCFHGIBCEBG = (uint)entry.Key
+                            OpUid = (uint)entry.Key
                         }
                     };
-                    notify.FIPIDGKPFHA.FIPIDGKPFHA.Add(entry.Value.Clone());
+                    notify.JENKGODEIOM.JENKGODEIOM.Add(entry.Value.Clone());
                     notifies.Add(notify);
                 }
             }
@@ -611,7 +557,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         return notifies;
     }
 
-    public MKHIPFHEKCK BuildRoomSnapshotForPlayer(uint roomOwnerUid, uint roomPlayerUid)
+    public POBLGKIGINE BuildRoomSnapshotForPlayer(uint roomOwnerUid, uint roomPlayerUid)
     {
         lock (RoomLock)
         {
@@ -644,66 +590,66 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             var packet = new BasePacket(CmdIds.SocialPlayGameplayOperationScNotify);
             packet.SetData(new SocialPlayGameplayOperationScNotify
             {
-                MFBDMLPDEOE = roomOwnerUid,
-                NCFHGIBCEBG = (uint)uid,
-                INPEGNFEPAP = BuildRoomSnapshotForPlayer(roomOwnerUid, (uint)uid)
+                RoomOwnerUid = roomOwnerUid,
+                OpUid = (uint)uid,
+                LABNNEGJNHO = BuildRoomSnapshotForPlayer(roomOwnerUid, (uint)uid)
             });
             await target.SendPacket(packet);
         }
     }
 
-    public FOFNOBHLKGO BuildDiyProto()
+    public BFAKMCIJFCB BuildDiyProto()
     {
         return BuildDiyProto(Data);
     }
 
-    public FOFNOBHLKGO BuildDiyProto(TrainCakeCatchData source)
+    public BFAKMCIJFCB BuildDiyProto(TrainCakeCatchData source)
     {
-        var diy = new FOFNOBHLKGO
+        var diy = new BFAKMCIJFCB
         {
-            MIPPCFJPJDD = (HEAJBHNMJGO)source.DiyTheme
+            GLOGEMFDMJG = (BOMHOLBACKF)source.DiyTheme
         };
 
-        diy.OJNJEDBBAJJ.AddRange(source.DiceSlots.Select(x =>
+        diy.PKMHMGAEAGO.AddRange(source.DiceSlots.Select(x =>
         {
-            var msg = new BIAIKHBFALH
+            var msg = new IIONNFELFEF
             {
                 DiceSlotId = (uint)x.DiceSlotId,
-                HGJHIJOGGIN = (uint)x.Index
+                Pose = (uint)x.Index
             };
-            msg.GBGDLNNOBID.AddRange(x.Values.Select(v => (uint)v));
+            msg.DMIOBEKLDED.AddRange(x.Values.Select(v => (uint)v));
             return msg;
         }));
 
-        diy.LKPGMBDBJFA.AddRange(source.StagePlacements.Select(x => new GFAHEGCPIEB
+        diy.PNHLAAMNGFE.AddRange(source.StagePlacements.Select(x => new HJACHMJFEAH
         {
-            HCJPDNDOHAM = (uint)x.CreatureId,
+            PCPDHEIEJFO = (uint)x.CreatureId,
             Slot = (uint)x.Slot
         }));
 
         return diy;
     }
 
-    public FOFNOBHLKGO ApplyDiy(FOFNOBHLKGO req)
+    public BFAKMCIJFCB ApplyDiy(BFAKMCIJFCB req)
     {
         EnsureDefaults();
-        Data.DiyTheme = (int)req.MIPPCFJPJDD;
+        Data.DiyTheme = (int)req.GLOGEMFDMJG;
 
-        Data.DiceSlots = req.OJNJEDBBAJJ.Select(x => new DiyDiceSlotInfo
+        Data.DiceSlots = req.PKMHMGAEAGO.Select(x => new DiyDiceSlotInfo
         {
             DiceSlotId = (int)x.DiceSlotId,
-            Index = (int)x.HGJHIJOGGIN,
-            Values = x.GBGDLNNOBID.Select(v => (int)v).ToList()
+            Index = (int)x.Pose,
+            Values = x.DMIOBEKLDED.Select(v => (int)v).ToList()
         }).ToList();
 
-        Data.StagePlacements = req.LKPGMBDBJFA.Select(x => new DiyStagePlacement
+        Data.StagePlacements = req.PNHLAAMNGFE.Select(x => new DiyStagePlacement
         {
-            CreatureId = (int)x.HCJPDNDOHAM,
+            CreatureId = (int)x.PCPDHEIEJFO,
             Slot = (int)x.Slot
         }).ToList();
 
         SyncCollectedCreatures(Data);
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
         return BuildDiyProto();
     }
 
@@ -723,23 +669,23 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         var unlockedAfterSearch = GetUnlockedPerformanceIds(Data);
         Data.PerformanceIds = unlockedAfterSearch.ToList();
 
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
         var rsp = new TrainCakeCatchSearchScRsp
         {
-            HCJPDNDOHAM = creatureId,
-            BLEDIOOJPNL = new PKILNDNCAMI
+            PCPDHEIEJFO = creatureId,
+            NIELDCLPOLA = new JOFHMCJPBCE
             {
-                HCJPDNDOHAM = creatureId,
+                PCPDHEIEJFO = creatureId,
                 Count = (uint)GetCollectedCreatureCount(Data, creatureIdInt)
             }
         };
 
-        rsp.OMFCGLJDFPD.AddRange(unlockedAfterSearch
+        rsp.GINENNKGDMG.AddRange(unlockedAfterSearch
             .Except(unlockedBeforeSearch)
             .Select(x => (uint)x));
-        rsp.KALIBGCODNF.AddRange(Data.SearchCreatureIds.Select(x => new LGGABHPGPDD
+        rsp.CEMFBJPOLNP.AddRange(Data.SearchCreatureIds.Select(x => new PJFIMFJPMCN
         {
-            HCJPDNDOHAM = (uint)x
+            PCPDHEIEJFO = (uint)x
         }));
         return rsp;
     }
@@ -758,16 +704,16 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             ];
         }
 
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
 
         var rsp = new TrainCakeCatchOpenBoxScRsp
         {
-            DHLGCEGONIB = Data.RefreshTime
+            CMHKFNFKGOI = Data.RefreshTime
         };
 
-        rsp.AFEJACMLOLH.AddRange(Data.CatTreeSlots.Select(x => new NPLEDHFMFDM
+        rsp.BJPHDKEBOBK.AddRange(Data.CatTreeSlots.Select(x => new IKAHKMNCFDN
         {
-            HCJPDNDOHAM = (uint)x.CreatureId,
+            PCPDHEIEJFO = (uint)x.CreatureId,
             Slot = (uint)x.Slot
         }));
 
@@ -781,10 +727,10 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         if (!Data.DiyLikeIds.Contains(Player.Uid))
             Data.DiyLikeIds.Add(Player.Uid);
 
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
 
         var rsp = new TrainCakeCatchDiyLikeScRsp();
-        rsp.JNNKJAEMOBN.AddRange(Data.DiyLikeIds.Select(x => (uint)x));
+        rsp.BPAOGJPLENJ.AddRange(Data.DiyLikeIds.Select(x => (uint)x));
         return rsp;
     }
 
@@ -797,10 +743,10 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         foreach (var perf in GameData.CakePerformanceConfigData.Values)
         {
             if (perf.QuestID == 0) continue;
-            if (!qm.QuestData.Quests.TryGetValue(perf.QuestID, out var info))
+            if (!qm.Data.Quests.TryGetValue(perf.QuestID, out var info))
             {
                 info = new QuestInfo { QuestId = perf.QuestID };
-                qm.QuestData.Quests[perf.QuestID] = info;
+                qm.Data.Quests[perf.QuestID] = info;
             }
 
             if (info.QuestStatus is QuestStatus.QuestFinish or QuestStatus.QuestClose) continue;
@@ -813,7 +759,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         if (changed.Count == 0) return;
 
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
         await Player.SendPacket(new PacketPlayerSyncScNotify(changed));
     }
 
@@ -824,40 +770,36 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             CreatureId = p.CreatureId,
             Slot = p.Slot
         }).ToList();
-        DatabaseHelper.ToSaveUidList.Add(Player.Uid);
+        DatabaseHelper.MarkDirty(Player.Uid);
     }
 
-    private OEBJBPNNOKO BuildSocialPlayPlayer(uint uid, bool isSelf)
+    private JBJNJPAOCDA BuildSocialPlayPlayer(uint uid, bool isSelf)
     {
         var data = ResolveSocialPlayPlayer(uid);
-        return new OEBJBPNNOKO
+        return new JBJNJPAOCDA
         {
             Uid = (uint)data.Uid,
-            SummonedPetId = data.Pet > 0 ? (uint)data.Pet : 0,
-            CGLMHJFCFPH = data.ToSimpleProto(FriendOnlineStatus.Online),
-            EKODIFJOBFB = Math.Max(0, data.LastActiveTime),
-            HCJMLMIGACG = true,
-            IACKOCPGIAK = CreateMotion(data.Pos, data.Rot, isSelf)
+            AJIPBLCIONL = data.ToSimpleProto(FriendOnlineStatus.Online),
+            AIMNJIMDIKM = Math.Max(0, data.LastActiveTime),
+            OJPDDAOJJKC = true,
+            NJDCPMENIFG = CreateMotion(data.Pos, data.Rot, isSelf)
         };
     }
 
-    private OEBJBPNNOKO BuildPlaceholderSocialPlayPlayer(uint uid, bool isSelf)
+    private JBJNJPAOCDA BuildPlaceholderSocialPlayPlayer(uint uid, bool isSelf)
     {
         var data = ResolveSocialPlayPlayer(uid);
-        var proto = new OEBJBPNNOKO
+        var proto = new JBJNJPAOCDA
         {
             Uid = (uint)data.Uid,
-            CGLMHJFCFPH = data.ToSimpleProto(FriendOnlineStatus.Online),
-            IACKOCPGIAK = CreatePlaceholderMotion()
+            AJIPBLCIONL = data.ToSimpleProto(FriendOnlineStatus.Online),
+            NJDCPMENIFG = CreatePlaceholderMotion()
         };
-
-        if (isSelf && data.Pet > 0)
-            proto.SummonedPetId = (uint)data.Pet;
 
         return proto;
     }
 
-    private void AppendFullSnapshotPlayer(MKHIPFHEKCK snapshot, SocialPlayRoom room, HashSet<int> addedUids, int memberUid,
+    private void AppendFullSnapshotPlayer(POBLGKIGINE snapshot, SocialPlayRoom room, HashSet<int> addedUids, int memberUid,
         bool isSelf)
     {
         if (!addedUids.Add(memberUid))
@@ -865,11 +807,11 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         var proto = BuildSocialPlayPlayer((uint)memberUid, isSelf);
         if (room.Motions.TryGetValue(memberUid, out var motion))
-            proto.IACKOCPGIAK = BuildSnapshotMotion(motion, proto.IACKOCPGIAK, isSelf);
+            proto.NJDCPMENIFG = BuildSnapshotMotion(motion, proto.NJDCPMENIFG, isSelf);
         snapshot.PlayerInfo.Add(proto);
     }
 
-    private void AppendPlaceholderSnapshotPlayer(MKHIPFHEKCK snapshot, HashSet<int> addedUids, int memberUid,
+    private void AppendPlaceholderSnapshotPlayer(POBLGKIGINE snapshot, HashSet<int> addedUids, int memberUid,
         bool isSelf)
     {
         if (!addedUids.Add(memberUid))
@@ -892,14 +834,14 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         }
     }
 
-    private static EHKEJEPNGMB CreateArrivalEntry(uint uid, string name, long? time = null)
+    private static PEEEEGAPCOK CreateArrivalEntry(uint uid, string name, long? time = null)
     {
-        return new EHKEJEPNGMB
+        return new PEEEEGAPCOK
         {
-            NINNEKFGNLI = 1,
-            NCFHGIBCEBG = uid,
-            GNCOPJNBCKI = time ?? Extensions.GetUnixSec(),
-            OFOMBFJEDKC = name
+            PLPPPCEPBDO = 1,
+            OpUid = uid,
+            CMIEOOODDIA = time ?? Extensions.GetUnixSec(),
+            AALDPOAKJBK = name
         };
     }
 
@@ -910,7 +852,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             room.ArrivalHistory.RemoveRange(0, room.ArrivalHistory.Count - 20);
     }
 
-    private static void RecordMotionLocked(SocialPlayRoom room, int uid, MACJBIAFNOI motion)
+    private static void RecordMotionLocked(SocialPlayRoom room, int uid, JOLAHHGIFHA motion)
     {
         room.Motions[uid] = motion.Clone();
 
@@ -925,7 +867,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             history.RemoveRange(0, history.Count - MaxBufferedMotionsPerPlayer);
     }
 
-    private static MACJBIAFNOI? GetCurrentMotion(uint roomOwnerUid, int uid)
+    private static JOLAHHGIFHA? GetCurrentMotion(uint roomOwnerUid, int uid)
     {
         lock (RoomLock)
         {
@@ -938,7 +880,7 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         }
     }
 
-    private MKHIPFHEKCK BuildSocialPlayRoomDataLocked(SocialPlayRoom room, uint roomOwnerUid, uint roomPlayerUid)
+    private POBLGKIGINE BuildSocialPlayRoomDataLocked(SocialPlayRoom room, uint roomOwnerUid, uint roomPlayerUid)
     {
         var snapshot = BuildSocialPlayRoomData(roomOwnerUid, roomPlayerUid);
         snapshot.PlayerInfo.Clear();
@@ -1088,12 +1030,12 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             return;
 
         var joinedPlayer = BuildSocialPlayPlayer((uint)Player.Uid, false);
-        joinedPlayer.IACKOCPGIAK = BuildSimpleMotion(GetCurrentMotion(roomOwnerUid, Player.Uid), Player.Data.Pos, Player.Data.Rot);
+        joinedPlayer.NJDCPMENIFG = BuildSimpleMotion(GetCurrentMotion(roomOwnerUid, Player.Uid), Player.Data.Pos, Player.Data.Rot);
         var notify = new SocialPlayGameplayOperationScNotify
         {
-            MFBDMLPDEOE = roomOwnerUid,
-            NCFHGIBCEBG = (uint)Player.Uid,
-            PEFPFCINABN = joinedPlayer
+            RoomOwnerUid = roomOwnerUid,
+            OpUid = (uint)Player.Uid,
+            GNLAECODENP = joinedPlayer
         };
 
         foreach (var uid in recipientUids)
@@ -1127,9 +1069,12 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         var notify = new SocialPlayGameplayOperationScNotify
         {
-            MFBDMLPDEOE = roomOwnerUid,
-            NCFHGIBCEBG = (uint)Player.Uid,
-            NEAIFLAADFE = (uint)Player.Uid
+            RoomOwnerUid = roomOwnerUid,
+            OpUid = (uint)Player.Uid,
+            // 4.2's leave-uid case (NEAIFLAADFE) maps onto one of the four bare-uint cases in 4.4
+            // (LMGGGLECNEA/HJHPHDACEHE/BJLCBAAKPDI/DLKOEIANIMK); DLKOEIANIMK is the gameplay-type by
+            // name-consistency, the rest are unprovable from structure — verify in-game.
+            BJLCBAAKPDI = (uint)Player.Uid
         };
 
         foreach (var uid in remainingMembers)
@@ -1142,14 +1087,14 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
             packet.SetData(notify.Clone());
             await target.SendPacket(packet);
 
-            
-            
+            // The leave popup/effect alone does not consistently despawn the actor on clients.
+            // Follow it with a refreshed room roster so the remaining members reconcile state.
             var snapshotPacket = new BasePacket(CmdIds.SocialPlayGameplayOperationScNotify);
             snapshotPacket.SetData(new SocialPlayGameplayOperationScNotify
             {
-                MFBDMLPDEOE = roomOwnerUid,
-                NCFHGIBCEBG = (uint)uid,
-                INPEGNFEPAP = BuildRoomSnapshotForPlayer(roomOwnerUid, (uint)uid)
+                RoomOwnerUid = roomOwnerUid,
+                OpUid = (uint)uid,
+                LABNNEGJNHO = BuildRoomSnapshotForPlayer(roomOwnerUid, (uint)uid)
             });
             await target.SendPacket(snapshotPacket);
         }
@@ -1178,9 +1123,9 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         };
     }
 
-    private static MACJBIAFNOI CreateMotion(Position? pos, Position? rot, bool isSelf)
+    private static JOLAHHGIFHA CreateMotion(Position? pos, Position? rot, bool isSelf)
     {
-        var motion = new MACJBIAFNOI
+        var motion = new JOLAHHGIFHA
         {
             Pos = (pos ?? new Position(3278, -14999, 22389)).ToProto(),
             Rot = (rot ?? new Position(0, 18426, 0)).ToProto()
@@ -1188,18 +1133,18 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         if (!isSelf)
         {
-            motion.GNGKNDCKKKC = 1;
-            motion.JCBGHAODNDD = 2;
-            motion.KHAJDKDHPGD = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            motion.NALBEFMOKIB = new Position(328, 0, -944).ToProto();
+            motion.ICNANKMDJIC = 1;
+            motion.FPHBEHJJBIA = 2;
+            motion.TimeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            motion.GHMKFMBDKNE = new Position(328, 0, -944).ToProto();
         }
 
         return motion;
     }
 
-    private static MACJBIAFNOI CreatePlaceholderMotion()
+    private static JOLAHHGIFHA CreatePlaceholderMotion()
     {
-        return new MACJBIAFNOI
+        return new JOLAHHGIFHA
         {
             Pos = new Vector
             {
@@ -1213,16 +1158,16 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
         };
     }
 
-    private static MACJBIAFNOI BuildSimpleMotion(MACJBIAFNOI? source, Position? fallbackPos, Position? fallbackRot)
+    private static JOLAHHGIFHA BuildSimpleMotion(JOLAHHGIFHA? source, Position? fallbackPos, Position? fallbackRot)
     {
-        return new MACJBIAFNOI
+        return new JOLAHHGIFHA
         {
             Pos = source?.Pos?.Clone() ?? (fallbackPos ?? new Position(3278, -14999, 22389)).ToProto(),
             Rot = source?.Rot?.Clone() ?? (fallbackRot ?? new Position(0, 18426, 0)).ToProto()
         };
     }
 
-    private static MACJBIAFNOI BuildSnapshotMotion(MACJBIAFNOI? source, MACJBIAFNOI fallbackMotion, bool isSelf)
+    private static JOLAHHGIFHA BuildSnapshotMotion(JOLAHHGIFHA? source, JOLAHHGIFHA fallbackMotion, bool isSelf)
     {
         var fallbackPos = fallbackMotion.Pos != null ? new Position(fallbackMotion.Pos) : null;
         var fallbackRot = fallbackMotion.Rot != null ? new Position(fallbackMotion.Rot) : null;
@@ -1230,38 +1175,38 @@ public class TrainCakeCatchManager(PlayerInstance player) : BasePlayerManager(pl
 
         if (isSelf)
         {
-            if (source?.NALBEFMOKIB != null)
-                motion.NALBEFMOKIB = source.NALBEFMOKIB.Clone();
+            if (source?.GHMKFMBDKNE != null)
+                motion.GHMKFMBDKNE = source.GHMKFMBDKNE.Clone();
 
-            if (source?.JCBGHAODNDD != null)
-                motion.JCBGHAODNDD = source.JCBGHAODNDD;
+            if (source?.FPHBEHJJBIA != null)
+                motion.FPHBEHJJBIA = source.FPHBEHJJBIA;
 
-            if (source?.DCBBKFFHHDL != null)
-                motion.DCBBKFFHHDL = source.DCBBKFFHHDL;
+            if (source?.GHEMGLKGKLC != null)
+                motion.GHEMGLKGKLC = source.GHEMGLKGKLC;
 
-            if (source?.KHAJDKDHPGD != null)
-                motion.KHAJDKDHPGD = source.KHAJDKDHPGD;
+            if (source?.TimeStamp != null)
+                motion.TimeStamp = source.TimeStamp;
 
-            if (source?.GNGKNDCKKKC != null)
-                motion.GNGKNDCKKKC = source.GNGKNDCKKKC;
+            if (source?.ICNANKMDJIC != null)
+                motion.ICNANKMDJIC = source.ICNANKMDJIC;
 
             return motion;
         }
 
-        if (source?.NALBEFMOKIB != null)
-            motion.NALBEFMOKIB = source.NALBEFMOKIB.Clone();
+        if (source?.GHMKFMBDKNE != null)
+            motion.GHMKFMBDKNE = source.GHMKFMBDKNE.Clone();
 
-        if (source?.JCBGHAODNDD != null)
-            motion.JCBGHAODNDD = source.JCBGHAODNDD;
+        if (source?.FPHBEHJJBIA != null)
+            motion.FPHBEHJJBIA = source.FPHBEHJJBIA;
 
-        if (source?.DCBBKFFHHDL != null)
-            motion.DCBBKFFHHDL = source.DCBBKFFHHDL;
+        if (source?.GHEMGLKGKLC != null)
+            motion.GHEMGLKGKLC = source.GHEMGLKGKLC;
 
-        if (source?.KHAJDKDHPGD != null)
-            motion.KHAJDKDHPGD = source.KHAJDKDHPGD;
+        if (source?.TimeStamp != null)
+            motion.TimeStamp = source.TimeStamp;
 
-        if (source?.GNGKNDCKKKC != null)
-            motion.GNGKNDCKKKC = source.GNGKNDCKKKC;
+        if (source?.ICNANKMDJIC != null)
+            motion.ICNANKMDJIC = source.ICNANKMDJIC;
 
         return motion;
     }

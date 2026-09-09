@@ -17,12 +17,12 @@ public class TrialActivityEntityLoader(SceneInstance scene, PlayerInstance playe
     {
         if (Scene.IsLoaded) return;
 
-        
+        // Get activity instance
         if (Player.ActivityManager!.TrialActivityInstance == null) return;
         var instance = Player.ActivityManager!.TrialActivityInstance;
         LoadGroups.SafeAddRange(Scene.FloorInfo!.Groups.Keys.ToList());
 
-        
+        // Setup stage
         GameData.AvatarDemoConfigData.TryGetValue(instance.Data.CurTrialStageId, out var excel);
         if (excel == null) return;
         LoadGroups.Clear();
@@ -38,24 +38,24 @@ public class TrialActivityEntityLoader(SceneInstance scene, PlayerInstance playe
     {
         if (info.IsClientOnly || info.IsDelete) return null;
 
-        
+        // Get challenge instance
         if (Player.ActivityManager!.TrialActivityInstance == null) return null;
         var instance = Player.ActivityManager!.TrialActivityInstance;
 
-        
+        // Get current stage monster infos
         GameData.AvatarDemoConfigData.TryGetValue(instance.Data.CurTrialStageId, out var excel);
         if (excel == null) return null;
         var stageMonsters = excel.StageMonsters1;
 
-        
+        // Get challenge monster info
         if (!stageMonsters.ContainsKey(info.ID)) return null;
         var stageMonsterInfo = stageMonsters[info.ID];
 
-        
+        // Get excels from game data
         if (!GameData.NpcMonsterDataData.ContainsKey(stageMonsterInfo.NpcMonsterId)) return null;
         var npcMonsterExcel = GameData.NpcMonsterDataData[stageMonsterInfo.NpcMonsterId];
 
-        
+        // Create monster from group monster info
         var entity = new EntityMonster(Scene, info.ToPositionProto(), info.ToRotationProto(), group.Id, info.ID,
             npcMonsterExcel, info);
         entity.EventId = stageMonsterInfo.EventId;

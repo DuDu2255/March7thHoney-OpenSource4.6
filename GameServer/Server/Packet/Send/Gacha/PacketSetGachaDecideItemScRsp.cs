@@ -5,15 +5,21 @@ namespace March7thHoney.GameServer.Server.Packet.Send.Gacha;
 
 public class PacketSetGachaDecideItemScRsp : BasePacket
 {
-    public PacketSetGachaDecideItemScRsp(uint gachaId, List<uint> order) : base(CmdIds.SetGachaDecideItemScRsp)
+    public PacketSetGachaDecideItemScRsp(uint gachaId, uint decideItemType, List<uint> order,
+        Retcode retcode = Retcode.RetSucc) : base(CmdIds.SetGachaDecideItemScRsp)
     {
+        // 4.3: SetGachaDecideItemScRsp 子结构混淆名变更
+        //   LECPJJAMNPF -> NBLOJLDLBEB (type OEIEJHBCOOM -> NEIMLKNMDBM)
+        //   PAPOKACIPPJ(gachaId) -> MMELNCHIDNC, DGOMHDMJHEK(order) -> OJNEFBJHCCK,
+        //   MBOEFLAHLEM(decideItemType) -> GFANBHAEKOK (与 SetGachaDecideItemCsReq 命名一致)
         var proto = new SetGachaDecideItemScRsp
         {
-            LECPJJAMNPF = new OEIEJHBCOOM
+            Retcode = (uint)retcode,
+            NBLOJLDLBEB = new NEIMLKNMDBM
             {
-                PAPOKACIPPJ = gachaId,
-                DGOMHDMJHEK = { order },
-                MBOEFLAHLEM = 1
+                MMELNCHIDNC = gachaId,
+                OJNEFBJHCCK = { order },
+                GFANBHAEKOK = decideItemType
             }
         };
 

@@ -15,7 +15,7 @@ public class PacketGetPhoneDataScRsp : BasePacket
             CurPhoneCase = (uint)player.Data.PhoneCase
         };
 
-        
+        // 反编译生成的 proto 把这两个 list 字段名标反了，按官服抓包矫正塞值方向
         foreach (var item in player.PlayerUnlockData!.PhoneThemes) proto.OwnedChatBubbles.Add((uint)item);
         foreach (var item in player.PlayerUnlockData!.ChatBubbles) proto.OwnedPhoneThemes.Add((uint)item);
         foreach (var item in player.PlayerUnlockData!.PhoneCases) proto.OwnedPhoneCases.Add((uint)item);

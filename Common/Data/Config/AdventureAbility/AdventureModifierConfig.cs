@@ -1,9 +1,11 @@
+using MemoryPack;
 using March7thHoney.Data.Config.Task;
 using Newtonsoft.Json.Linq;
 
 namespace March7thHoney.Data.Config.AdventureAbility;
 
-public class AdventureModifierConfig
+[MemoryPackable]
+public partial class AdventureModifierConfig
 {
     public float LifeTime { get; set; }
     public int Level { get; set; }
@@ -11,8 +13,7 @@ public class AdventureModifierConfig
     public bool IsCountDownAfterBattle { get; set; }
 
     public bool ApplyBehaviorFlagBindEffects { get; set; }
-
-    
+    public List<string> BehaviorFlagList { get; set; } = [];
     public float TickInterval { get; set; }
     public List<TaskConfigInfo> OnInterval { get; set; } = [];
     public List<TaskConfigInfo> OnAdd { get; set; } = [];
@@ -39,11 +40,11 @@ public class AdventureModifierConfig
 
     public List<TaskConfigInfo> OnCounterAttack { get; set; } = [];
 
-    
+    //public MazeBuffType MazeBuffType { get; set; }     
     public int Priority { get; set; }
 
     public int Count { get; set; }
-    
+    //public ModifierStacking Stacking { get; set; }
 
 
     public static AdventureModifierConfig LoadFromJObject(JObject obj)
@@ -70,6 +71,9 @@ public class AdventureModifierConfig
 
         if (obj.ContainsKey(nameof(ApplyBehaviorFlagBindEffects)))
             info.ApplyBehaviorFlagBindEffects = obj[nameof(ApplyBehaviorFlagBindEffects)]!.ToObject<bool>();
+
+        if (obj.ContainsKey(nameof(BehaviorFlagList)))
+            info.BehaviorFlagList = obj[nameof(BehaviorFlagList)]?.ToObject<List<string>>() ?? [];
 
         if (obj.ContainsKey(nameof(OnInterval)))
             info.OnInterval = obj[nameof(OnInterval)]?.Select(x => TaskConfigInfo.LoadFromJsonObject((x as JObject)!))
@@ -133,7 +137,7 @@ public class AdventureModifierConfig
                 ?.Select(x => TaskConfigInfo.LoadFromJsonObject((x as JObject)!))
                 .ToList() ?? [];
 
-        
+        // TODO: others
 
         return info;
     }

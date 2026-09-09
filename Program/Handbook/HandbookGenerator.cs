@@ -23,22 +23,24 @@ public static class HandbookGenerator
         if (!directory.Exists)
             return;
 
+        Dictionary<BigInteger, string>? sharedFallback = null;
+
         foreach (var langFile in directory.GetFiles())
         {
             if (langFile.Extension != ".json") continue;
             if (langFile.Name.StartsWith("TextMapMain", StringComparison.OrdinalIgnoreCase)) continue;
             var lang = langFile.Name.Replace("TextMap", "").Replace(".json", "");
 
-            
+            // Check if handbook needs to regenerate
             var handbookPath = Path.Combine(HandbookDir, $"Handbook {lang}.txt");
             if (File.Exists(handbookPath))
             {
                 var handbookInfo = new FileInfo(handbookPath);
                 if (handbookInfo.LastWriteTime >= GetHandbookSourceLastWriteTime(langFile))
-                    continue; 
+                    continue; // Skip if handbook is newer than its input sources
             }
 
-            Generate(lang);
+            Generate(lang, ref sharedFallback);
         }
 
         Logger.GetByClassName()
@@ -46,6 +48,12 @@ public static class HandbookGenerator
     }
 
     public static void Generate(string lang)
+    {
+        Dictionary<BigInteger, string>? fallback = null;
+        Generate(lang, ref fallback);
+    }
+
+    private static void Generate(string lang, ref Dictionary<BigInteger, string>? sharedFallback)
     {
         var config = ConfigManager.Config;
         var handbookLang = lang == "CN" ? "CHS" : lang;
@@ -61,14 +69,15 @@ public static class HandbookGenerator
 
         if (!File.Exists(fallbackTextMapPath))
         {
-            Logger.GetByClassName().Error(I18NManager.Translate("Server.ServerInfo.FailedToReadItem", textMapPath,
-                I18NManager.Translate("Word.NotFound")));
-            return;
+            Logger.GetByClassName().Warn(I18NManager.Translate("Server.ServerInfo.FailedToReadItem",
+                fallbackTextMapPath, I18NManager.Translate("Word.NotFound")));
+            fallbackTextMapPath = textMapPath;
         }
 
         var textMap = JsonConvert.DeserializeObject<Dictionary<BigInteger, string>>(File.ReadAllText(textMapPath));
-        var fallbackTextMap =
+        sharedFallback ??=
             JsonConvert.DeserializeObject<Dictionary<BigInteger, string>>(File.ReadAllText(fallbackTextMapPath));
+        var fallbackTextMap = sharedFallback;
 
         if (textMap == null || fallbackTextMap == null)
         {
@@ -243,11 +252,17 @@ public static class HandbookGenerator
     {
         foreach (var avatar in GameData.AvatarConfigData.Values)
         {
-            var name = map.TryGetValue(avatar.AvatarName.Hash, out var value) ? value :
-                fallback.TryGetValue(avatar.AvatarName.Hash, out value) ? value : $"[{avatar.AvatarName.Hash}]";
+            var resolved = TryGetNameFromTextMap(avatar.AvatarName.Hash, map, fallback, out var name);
+
+            // Legacy AvatarConfig dumps carry old 32-bit name hashes that no longer resolve against the
+            // current 64-bit TextMap (e.g. 1001 March 7th -> [-531793651]). The character's inventory item
+            // shares the avatar id and keeps a valid name hash, so fall back to it.
+            if (!resolved && GameData.ItemConfigData.TryGetValue(avatar.AvatarID, out var item))
+                resolved = TryGetNameFromTextMap(item.ItemName.Hash, map, fallback, out name);
+
             builder.AppendLine(avatar.AvatarID + ": " + name);
 
-            if (setName && name != $"[{avatar.AvatarName.Hash}]") avatar.Name = name;
+            if (setName && resolved) avatar.Name = name;
         }
     }
 
@@ -321,7 +336,7 @@ public static class HandbookGenerator
     {
         foreach (var display in GameData.GridFightRoleBasicInfoData.Values)
         {
-            
+            // get from avatar id
             if (!GameData.AvatarConfigData.TryGetValue((int)display.AvatarID, out var avatar)) continue;
             var name = GetNameFromTextMap(avatar.AvatarName.Hash, map, fallback);
 
@@ -334,7 +349,7 @@ public static class HandbookGenerator
     {
         foreach (var display in GameData.GridFightEquipmentData.Values)
         {
-            
+            // get from items
             if (!GameData.GridFightItemsData.TryGetValue(display.ID, out var item)) continue;
             var name = GetNameFromTextMap(item.ItemName.Hash, map, fallback);
 
@@ -347,7 +362,7 @@ public static class HandbookGenerator
     {
         foreach (var display in GameData.GridFightConsumablesData.Values)
         {
-            
+            // get from items
             if (!GameData.GridFightItemsData.TryGetValue(display.ID, out var item)) continue;
             var name = GetNameFromTextMap(item.ItemName.Hash, map, fallback);
 
@@ -372,6 +387,21 @@ public static class HandbookGenerator
         if (map.TryGetValue(key, out var value)) return value;
         if (fallback.TryGetValue(key, out value)) return value;
         return $"[{key}]";
+    }
+
+    // As GetNameFromTextMap, but reports whether the hash actually resolved (vs. an unresolved "[hash]"
+    // placeholder) so callers can apply a fallback source instead of persisting a placeholder as a name.
+    public static bool TryGetNameFromTextMap(BigInteger key, Dictionary<BigInteger, string> map,
+        Dictionary<BigInteger, string> fallback, out string name)
+    {
+        if (map.TryGetValue(key, out var value) || fallback.TryGetValue(key, out value))
+        {
+            name = value;
+            return true;
+        }
+
+        name = $"[{key}]";
+        return false;
     }
 
     public static void WriteToFile(string lang, string content)

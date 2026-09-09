@@ -27,11 +27,11 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
 
         var propertyAction = modifiedGroupActions.GetValueOrDefault(data.PropertyName);
 
-        
+        // get cur actions
         var targetActions = propertyAction?.GetValueOrDefault(data.NewValue);
         if (targetActions == null) return;
 
-        
+        // execute actions
         await ExecuteRainbowActions(targetActions.PrivateActions);
         await ExecuteRainbowActions(targetActions.Actions);
     }
@@ -75,7 +75,7 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
 
         if (groupId == 0 || string.IsNullOrEmpty(propertyName)) return;
 
-        
+        // update group property
         await SceneInst.UpdateGroupProperty(groupId, propertyName, propertyValue, false);
     }
 
@@ -95,7 +95,7 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
         var propertyCopyFromName = (string)(param.GetValueOrDefault("PropertyCopyFromName") ?? string.Empty);
         if (groupId == 0 || string.IsNullOrEmpty(propertyName) || string.IsNullOrEmpty(propertyCopyFromName)) return;
 
-        
+        // get copy from group property
         var copyFromGroupProperty = SceneInst.GetGroupProperty(groupId, propertyCopyFromName);
         await SceneInst.UpdateGroupProperty(groupId, propertyName, copyFromGroupProperty, false);
     }
@@ -108,13 +108,13 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
         var succActions = (JToken)(param.GetValueOrDefault("SuccActions") ?? JArray.Parse("[]"));
         if (groupId == 0 || string.IsNullOrEmpty(propertyName)) return;
 
-        
+        // cast to List<RainbowActionInfo>
         var actions = succActions.ToObject<List<RainbowActionInfo>>() ?? [];
 
-        
+        // check if group property value equal to target value
         var groupPropertyValue = SceneInst.GetGroupProperty(groupId, propertyName);
         if (groupPropertyValue == propertyValue)
-            
+            // execute actions
             await ExecuteRainbowActions(actions);
     }
 
@@ -125,7 +125,7 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
 
         if (string.IsNullOrEmpty(savedValueName)) return;
 
-        
+        // update floor saved data
         await SceneInst.UpdateFloorSavedValue(savedValueName, savedValue);
     }
 
@@ -135,19 +135,19 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
 
         if (string.IsNullOrEmpty(propertyName)) return;
 
-        
+        // get current target puzzle group actions
         var modifiedGroupActions = GameData.SceneRainbowGroupPropertyData.FloorProperty
             .GetValueOrDefault(SceneInst.FloorId, []).GetValueOrDefault(CurTargetPuzzleGroupId);
         if (modifiedGroupActions == null) return;
 
         var propertyAction = modifiedGroupActions.GetValueOrDefault(propertyName);
 
-        
+        // get cur actions
         var targetActions =
             propertyAction?.GetValueOrDefault(SceneInst.GetGroupProperty(CurTargetPuzzleGroupId, propertyName));
         if (targetActions == null) return;
 
-        
+        // execute actions
         await ExecuteRainbowActions(targetActions.Actions);
     }
 
@@ -158,18 +158,18 @@ public class RainbowSceneComponent(SceneInstance scene) : BaseSceneComponent(sce
 
         if (string.IsNullOrEmpty(propertyName)) return;
 
-        
+        // get current target puzzle group actions
         var modifiedGroupActions = GameData.SceneRainbowGroupPropertyData.FloorProperty
             .GetValueOrDefault(SceneInst.FloorId, []).GetValueOrDefault(CurTargetPuzzleGroupId);
         if (modifiedGroupActions == null) return;
 
         var propertyAction = modifiedGroupActions.GetValueOrDefault(propertyName);
 
-        
+        // get cur actions
         var targetActions = propertyAction?.GetValueOrDefault(propertyValue);
         if (targetActions == null) return;
 
-        
+        // execute actions
         await ExecuteRainbowActions(targetActions.Actions);
     }
 }

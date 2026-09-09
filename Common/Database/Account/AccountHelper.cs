@@ -1,3 +1,4 @@
+using MemoryPack;
 using March7thHoney.Database.Mail;
 using March7thHoney.Command;
 using March7thHoney.Util;
@@ -41,7 +42,7 @@ public static class AccountHelper
         var newUid = uid;
         if (uid == 0)
         {
-            newUid = 10001; 
+            newUid = 10001; // start from 10001
             while (AccountData.GetAccountByUid(newUid) != null) newUid++;
         }
 

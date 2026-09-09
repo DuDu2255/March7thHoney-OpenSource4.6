@@ -108,7 +108,7 @@ public class CommandUnlockAll : ICommand
 
         foreach (var id in allList)
         {
-            
+            // finish mission
             await player.MissionManager!.AcceptMainMission(id);
             await player.MissionManager!.FinishMainMission(id);
         }
@@ -134,7 +134,7 @@ public class CommandUnlockAll : ICommand
 
         foreach (var id in allList)
         {
-            
+            // finish mission
             await player.QuestManager!.AcceptQuest(id);
             await player.QuestManager!.FinishQuest(id);
         }
@@ -160,7 +160,7 @@ public class CommandUnlockAll : ICommand
 
         foreach (var id in allList)
         {
-            
+            // finish mission
             await player.QuestManager!.AcceptQuest(id);
             await player.QuestManager!.FinishQuest(id);
         }

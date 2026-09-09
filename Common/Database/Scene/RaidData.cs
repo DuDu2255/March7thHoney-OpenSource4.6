@@ -1,42 +1,35 @@
+using MemoryPack;
 using March7thHoney.Database.Lineup;
 using March7thHoney.Proto;
 using March7thHoney.Util;
-using SqlSugar;
 
 namespace March7thHoney.Database.Scene;
 
-[SugarTable("RaidData")]
+[DbTable("RaidData")]
 public class RaidData : BaseDatabaseDataHelper
 {
-    [SugarColumn(IsJson = true)] public Dictionary<int, Dictionary<int, RaidRecord>> RaidRecordDatas { get; set; } = [];
+    public Dictionary<int, Dictionary<int, RaidRecord>> RaidRecordDatas { get; set; } = [];
 
-    [SugarColumn(IsJson = true)]
     [Obsolete("Using RaidRecordDatas")]
     public Dictionary<int, RaidRecord> RaidRecordData { get; set; } = [];
 
-    
-    
-
-    
-    
-
-    
     public int CurRaidId { get; set; }
     public int CurRaidWorldLevel { get; set; }
 }
 
-public class RaidRecord
+[MemoryPackable]
+public partial class RaidRecord
 {
-    
+    // Basic Info
     public int RaidId { get; set; }
     public int WorldLevel { get; set; }
     public RaidStatus Status { get; set; }
     public long FinishTimeStamp { get; set; }
 
-    
+    // Lineup Info
     public List<LineupAvatarInfo> Lineup { get; set; } = [];
 
-    
+    // Scene Info
     public Position Pos { get; set; } = new();
     public Position Rot { get; set; } = new();
     public int PlaneId { get; set; }

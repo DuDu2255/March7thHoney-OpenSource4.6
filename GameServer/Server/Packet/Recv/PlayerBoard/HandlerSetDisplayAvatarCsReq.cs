@@ -5,23 +5,19 @@ using March7thHoney.Proto;
 namespace March7thHoney.GameServer.Server.Packet.Recv.PlayerBoard;
 
 [Opcode(CmdIds.SetDisplayAvatarCsReq)]
-public class HandlerSetDisplayAvatarCsReq : Handler
+public class HandlerSetDisplayAvatarCsReq : Handler<SetDisplayAvatarCsReq>
 {
-    public override async Task OnHandle(Connection connection, byte[] header, byte[] data)
+    protected override async Task OnHandle(Connection connection, PlayerInstance player, SetDisplayAvatarCsReq req)
     {
-        var req = SetDisplayAvatarCsReq.Parser.ParseFrom(data);
-        var player = connection.Player!;
-        var avatars = player.AvatarManager!.AvatarData!.DisplayAvatars;
+        var avatars = player.AvatarManager!.Data!.DisplayAvatars;
         avatars.Clear();
-        foreach (var avatar in req.DisplayAvatarList)
+        foreach (var displayAvatar in req.DisplayAvatarList.OrderBy(x => x.Pos))
         {
-            if (avatar.AvatarId == 0) continue;
-
-            var avatarData = player.AvatarManager!.AvatarData.FormalAvatars.FirstOrDefault(x =>
-                x.BaseAvatarId == (int)avatar.AvatarId);
+            var avatarData = player.AvatarManager!.Data.FormalAvatars.FirstOrDefault(x =>
+                x.BaseAvatarId == (int)displayAvatar.AvatarId);
             if (avatarData != null) avatars.Add(avatarData.BaseAvatarId);
         }
 
-        await connection.SendPacket(new PacketSetDisplayAvatarScRsp(req.DisplayAvatarList));
+        await connection.SendPacket(new PacketSetDisplayAvatarScRsp(req));
     }
 }
