@@ -110,7 +110,7 @@ Workflow publishes self-contained builds for:
 
 - Check server logs under your configured log path.
 - `/scene reload` can solve most of the problem.
-- Community support: <https://discord.gg/castoriceps>
+- Community support: <https://discord.gg/CyreneEchoes>
 
 ## Credits
 - Commit history details: [History Commits](docs/History%20Commits.md)
